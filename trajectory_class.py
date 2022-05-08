@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import regex
 from sklearn.neighbors import KDTree
+from scipy.spatial import cKDTree
 
 
 class Trajectory:
@@ -118,16 +119,16 @@ class Trajectory:
 
         return out_1, out_2
 
-    def get_neighbour_KDT(self, species_1=None, species_2=None):
+    def get_neighbour_KDT(self, species_1=None, species_2=None, mode='normal', snapshot=0):
         '''
         Routin using sklearns implementation of the KDTree datastructure for quick nearestneighbour search in O(log(n))
         compared to the naive O(N) approach
-        TODO:: implement a PBC version either by hand or using one of the following approaches
-        > https://www.youtube.com/watch?v=Glp7THUpGow explanation of KD-Trees
-        > use https://docs.scikit-nano.org/dev/api/sknano.core.analysis.PeriodicCKDTree.html for a KDTree with PBC!!!!!
-        > alternatively look into scipy.spatial.cKDTree().query()
+        TODO:: implement a PBC version
         :param species_1: 2D numpy array of the positions of particles from species1 (n_row, (index, species, x, y, z))
         :param species_2: 2D numpy array of the positions of particles from species2 (n_row, (index, species, x, y, z))
+        :param mode: sets the handling of boundary conditions with default 'normal' meaning no boundary condition
+                    optional mode ['pbc']
+        :param snapshot: specifies which snapshot we are looking at, default value is 0
         :return: ind_out np.array of the nearest neighbour indices of species1 found in species2, dist_out np.array of
                 the euclidean distance
         '''
@@ -141,7 +142,10 @@ class Trajectory:
             #raise ValueError('set self.s1 or self.s2 first or pass required arguments')
         try:
             print(species_1.shape)
-            tree = KDTree(species_2[:, 2:], leaf_size=species_2.shape[0])
+            if mode == 'normal':
+                tree = cKDTree(species_2[:, 2:], leafsize=species_2.shape[0])
+            if mode == 'pbc':
+                tree = cKDTree(data=species_2[:, 2:], leafsize=species_2.shape[0], boxsize=self.box_size[snapshot])
 
             n_query = species_1.shape[0]
             ind_out = np.zeros(n_query)
@@ -154,8 +158,10 @@ class Trajectory:
             species_1 = species_1[0]
             species_2 = species_2[0]
 
-            #print(species_1.shape)
-            tree = KDTree(species_2[:, 2:], leaf_size=species_2.shape[0])
+            if mode == 'normal':
+                tree = cKDTree(species_2[:, 2:], leafsize=species_2.shape[0])
+            if mode == 'pbc':
+                tree = cKDTree(data=species_2[:, 2:], leafsize=species_2.shape[0], boxsize=self.box_size[snapshot])
 
             n_query = species_1.shape[0]
             ind_out = np.zeros(n_query)
@@ -178,7 +184,7 @@ class Trajectory:
                 euclidean distance
         '''
 
-        def get_distance(x, y, mode, img=snapshot):
+        def get_distance(x, y, mode='normal', img=snapshot):
             '''
             wraper for np norm function to get euclidean metric
             :param x:
@@ -275,9 +281,36 @@ class Trajectory:
         ax1.set_title("Histogram of Water Species")
         ax1.xaxis.set_ticks_position('none')
         ax1.yaxis.set_ticks_position('none')
-        plot = ax1.hist(index_list, bins=len(np.unique(index_list)), histtype='bar', alpha=0.8, color="purple")
+        h, _, _ = ax1.hist(index_list, bins=np.arange(min(index_list), max(index_list) + 1, 1),
+                           histtype='bar', alpha=0.8, color="purple")
         plt.show()
-        return plot
+        plt.hist(h, bins=np.arange(min(h), max(h) + 1, 1),
+                 histtype='bar', alpha=0.8, color="purple", density=True)
+        plt.xlabel('number of H bonds')
+        plt.ylabel('frequency')
+        plt.title('Distribution of H-Bonds')
+        plt.show()
+        return
+
+
+
+
+    def displace(self, ind, r=1.0, dr=0.05):
+        '''
+        Method to displace a given hydrogen in the box
+        :param ind: Int or list of Ints of elements to displace
+        :param r: Radius in which the displacement should happen
+        :param dr: Thickness of the shell where to displace to
+        :return:  Returns an array of new particle positions which can be used as an initial trajectory for LAMMPS
+        '''
+
+
+
+
+        return
+
+
+
 
 
 if __name__ == "__main__":
@@ -286,9 +319,10 @@ if __name__ == "__main__":
     traj = Trajectory(file)
     traj.get_box_size()
     traj.s1, traj.s2 = traj.split_species()
-    #traj.indexlist, dist_1 = traj.get_neighbour_KDT()
-    index, dist_2 = traj.get_neighbour_naive(mode='pbc')
-    #traj.get_water_hist()
+    traj.indexlist, dist_1 = traj.get_neighbour_KDT(mode='pbc', snapshot=3)
+    #index, dist_2 = traj.get_neighbour_naive(mode='pbc', snapshot=3)
+    index, dist_2 = traj.get_neighbour_KDT(snapshot=3)
     traj.get_water_hist(index)
+    traj.get_water_hist(traj.indexlist)
 
     print(traj.box_size)
