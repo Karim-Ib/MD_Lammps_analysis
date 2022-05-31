@@ -24,7 +24,6 @@ class Trajectory:
     def lammpstrj_to_np(self):
         '''
         function to parse lammstrj format files to extract trajectories and return them in use able numpy data structures.
-
         :param file: string giving the lammpstrj file path
         :return: returns n_dim np array with the trajectory at each snapshot
         '''
@@ -143,7 +142,7 @@ class Trajectory:
         try:
             print(species_1.shape)
             if mode == 'normal':
-                tree = cKDTree(species_2[:, 2:], leafsize=species_2.shape[0])
+                tree = cKDTree(data=species_2[:, 2:], leafsize=species_2.shape[0])
             if mode == 'pbc':
                 tree = cKDTree(data=species_2[:, 2:], leafsize=species_2.shape[0], boxsize=self.box_size[snapshot])
 
@@ -155,11 +154,11 @@ class Trajectory:
         except AttributeError:
 
             print("Atribute Error occured(recieved list instead of numpy array) using first element of list instead")
-            species_1 = species_1[0]
-            species_2 = species_2[0]
+            species_1 = species_1[snapshot]
+            species_2 = species_2[snapshot]
 
             if mode == 'normal':
-                tree = cKDTree(species_2[:, 2:], leafsize=species_2.shape[0])
+                tree = cKDTree(data=species_2[:, 2:], leafsize=species_2.shape[0])
             if mode == 'pbc':
                 tree = cKDTree(data=species_2[:, 2:], leafsize=species_2.shape[0], boxsize=self.box_size[snapshot])
 
@@ -292,10 +291,17 @@ class Trajectory:
         plt.show()
         return
 
+    def get_ion_trajectory(self):
+        
 
 
 
-    def displace(self, ind, r=1.0, dr=0.05):
+        return
+
+
+
+
+    def set_displace(self, ind, r=1.0, dr=0.05):
         '''
         Method to displace a given hydrogen in the box
         :param ind: Int or list of Ints of elements to displace
@@ -310,19 +316,18 @@ class Trajectory:
         return
 
 
-
-
-
 if __name__ == "__main__":
-    file = 'water.lammpstrj'
-
+    #file = '/home/ibrahimk95/Documents/n2p2_sims/pablo_files/350k_1/water.lammpstr'
+    file = '/home/ibrahimk95/Documents/n2p2_sims/pablo_files/Test_Traj/trjwater.lammpstrj'
     traj = Trajectory(file)
     traj.get_box_size()
     traj.s1, traj.s2 = traj.split_species()
-    traj.indexlist, dist_1 = traj.get_neighbour_KDT(mode='pbc', snapshot=3)
-    #index, dist_2 = traj.get_neighbour_naive(mode='pbc', snapshot=3)
-    index, dist_2 = traj.get_neighbour_KDT(snapshot=3)
+    #traj.indexlist, dist_1 = traj.get_neighbour_KDT(mode='pbc', snapshot=10)
+    index, dist_2 = traj.get_neighbour_naive(mode='pbc', snapshot=10)
+    #index, dist_2 = traj.get_neighbour_KDT(snapshot=3)
     traj.get_water_hist(index)
-    traj.get_water_hist(traj.indexlist)
+    #traj.get_water_hist(traj.indexlist)
 
-    print(traj.box_size)
+    #print(traj.box_size)
+
+    #print(np.arange(0, 1628)[np.isin(np.arange(0, 1628), traj.indexlist)])
