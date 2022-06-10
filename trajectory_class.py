@@ -7,19 +7,82 @@ from scipy.spatial import cKDTree
 
 class Trajectory:
     '''
-    Class to parse, manipulate and plot the lammptrajectory objects.
+    Class to parse, manipulate and plot the lammps-trajectory objects.
     Takes one input argument 'file' which is the filepath of the .lammpstrj file to initialize
+    - added functionality to also parse gromac trajectory .gro files.
+    - TODO:: added functionality to trace molecules over time steps.
     '''
 
-    def __init__(self, file):
+    def __init__(self, file, format='lammpstrj'):
+        '''
+        constructor of trajectory class
+        :param file: file path to get the trajectory from
+        :param format: default "lammpstrj", optional "gromac"
+        '''
         self.file = file
-        self.trajectory, self.box_dim = self.lammpstrj_to_np()
+        if format == 'lammpstrj':
+            self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np()
+        if format == 'gromac':
+           self.trajectory, self.box_dim = self.gromac_to_np()
         self.n_snapshots = len(self.box_dim)
         self.s1 = 0
         self.s2 = 0
         self.box_size = 0
         self.indexlist = 0
         self.distance = 0
+
+    def gromac_to_np(self):
+        '''
+        Method to parse gromac style formated trajectories
+        :param file: string giving the lammpstrj file path
+        :return: returns n_dim np array with the trajectory at each snapshot and a list of the current box dimensions
+        '''
+
+
+        snap_count = 0
+        snap_lines = []
+        n_atoms = 15360     ###fix hard-code at some point
+
+        with open(self.file) as f:
+            for snap, line in enumerate(f):
+                if regex.match('Generated', line.split()[0]):
+                    snap_lines.append(snap + 2)
+                    snap_count += 1
+
+            atom_list = np.zeros((snap_count, n_atoms , 5))
+            ind_list = [np.zeros(0) for _ in range(snap_count)]
+
+            for i in range(snap_count):
+                ind_list[i] = np.arange(snap_lines[i], snap_lines[i] + n_atoms )
+
+        #print(ind_list)
+        snap_count = 0
+        line_count = 0
+        box_dim = []
+        with open(self.file) as f:
+            for line_number, line in enumerate(f):
+
+                if len(line.split()[:]) == 3:
+                    box_dim.append(np.array([float(i) for i in line.split()[:]]))
+
+                if any(line_number == ind_list[snap_count]):
+                    if regex.match('OW1', line.split()[1]):
+                        atom_list[snap_count, line_count, 1] = 1
+                    if regex.match('HW2', line.split()[1]):
+                        atom_list[snap_count, line_count, 1] = 2
+                    if regex.match('HW3', line.split()[1]):
+                        atom_list[snap_count, line_count, 1] = 2
+
+                    atom_list[snap_count, line_count, 2:] = np.array([float(i) for i in line.split()[-3:]])
+                    line_count += 1
+                if line_count == n_atoms:
+                    snap_count += 1
+                    line_count = 0
+                    print(snap_count)
+                if line_number >= ind_list[-1][-1]:
+                    break
+        return atom_list, box_dim
+
 
     def lammpstrj_to_np(self):
         '''
@@ -86,7 +149,7 @@ class Trajectory:
                     print("Processing Snapshot:" + str(snap_count))
                 if line_number >= ind_list[-1][-1]:
                     break
-        return atom_list, box_dim
+        return atom_list, box_dim, n_atoms
 
     def get_box_size(self):
         '''
@@ -155,8 +218,8 @@ class Trajectory:
         except AttributeError:
 
             print("Atribute Error occured(recieved list instead of numpy array) using first element of list instead")
-            species_1 = species_1[0]
-            species_2 = species_2[0]
+            species_1 = species_1[snapshot]
+            species_2 = species_2[snapshot]
 
             if mode == 'normal':
                 tree = cKDTree(species_2[:, 2:], leafsize=species_2.shape[0])
@@ -180,8 +243,8 @@ class Trajectory:
         :param mode: sets the handling of boundary conditions with default 'normal' meaning no boundary condition
                     optional mode ['pbc']
         :param snapshot: specifies which snapshot we are looking at, default value is 0
-        :return: ind_out np.array of the nearest neighbour indices of species1 found in species2, dist_out np.array of the
-                euclidean distance
+        :return: ind_out np.array of the nearest neighbour indices of species1 found in species2, dist_out np.array of
+                the euclidean distance
         '''
 
         def get_distance(x, y, mode='normal', img=snapshot):
@@ -240,7 +303,7 @@ class Trajectory:
 
         except AttributeError:
 
-            print("Atribute Error occured(recieved list instead of numpy array) using first element of list instead")
+            print("Atribute Error occured(recieved list instead of numpy array) using indexed element of list instead")
             species_1 = species_1[snapshot]
             species_2 = species_2[snapshot]
             n_row_1 = species_1.shape[0]
@@ -295,7 +358,7 @@ class Trajectory:
 
 
 
-    def displace(self, ind, r=1.0, dr=0.05):
+    def do_displace(self, ind, r=1.0, dr=0.05):
         '''
         Method to displace a given hydrogen in the box
         :param ind: Int or list of Ints of elements to displace
@@ -306,23 +369,108 @@ class Trajectory:
 
 
 
-
         return
 
 
 
+    def group_molecules(self, timestep=5000):
+        '''
+        method to group nearest neighbours back to molecules to track their trajectory in time
+        :return: lammpstraj file readable by common MD visualizer like ovito
+        '''
+
+        new_traj = open('grouped_water.lammpstrj', "w")
+        new_traj.close()
+
+
+        def write_lammpstrj(molecules, ts=timestep, snapshot=0):
+            with open("grouped_water.lammpstrj", "a") as group_traj:
+                group_traj.write('ITEM: TIMESTEP\n')
+                group_traj.write(f'{snapshot * ts}\n')
+                group_traj.write("ITEM: NUMBER OF ATOMS\n")
+                group_traj.write(str(self.n_atoms)+"\n")
+                group_traj.write("ITEM: BOX BOUNDS xy xz yz pp pp pp\n")
+                for i in range(3):
+                    temp = " ".join(map(str, self.box_dim[snapshot][i, :]))
+                    group_traj.write(temp+"\n")
+
+                group_traj.write("ITEM: ATOMS id type xs ys zs\n")
+
+                for ind, list in enumerate(molecules):
+                    if len(list) == 1:              #only O atom
+                        for index in list:
+                            temp = self.s2[snapshot][index, :]
+                            temp[1] = 1
+                            temp = " ".join(map(str, temp))
+                            group_traj.write(temp+"\n")
+                    if len(list) == 2:
+                        for index in list[:-1]:     #index all the H atoms
+                            temp = self.s1[snapshot][index, :]
+                            temp[1] = 1
+                            temp = " ".join(map(str, temp))
+                            group_traj.write(temp+"\n")
+                        temp = self.s2[snapshot][list[-1], :]         #write the O atom by hand
+                        temp[1] = 1
+                        temp = " ".join(map(str, temp))
+                        group_traj.write(temp+"\n")
+                    if len(list) == 3:
+                        for index in list[:-1]:
+                            #print(type(index))
+                            temp = self.s1[snapshot][index, :]
+                            temp[1] = 1
+                            temp = " ".join(map(str, temp))
+                            group_traj.write(temp+"\n")
+                        temp = self.s2[snapshot][list[-1], :]
+                        temp[1] = 1
+                        temp = " ".join(map(str, temp))
+                        group_traj.write(temp+"\n")
+                    if len(list) == 4:
+                        for index in list[:-1]:
+                            temp = self.s1[snapshot][index, :]
+                            temp[1] = 1
+                            temp = " ".join(map(str, temp))
+                            group_traj.write(temp+"\n")
+                        temp = self.s2[snapshot][list[-1], :]
+                        temp[1] = 1
+                        temp = " ".join(map(str, temp))
+                        group_traj.write(temp+"\n")
+
+                    if len(list) == 5:
+                        for index in list[:-1]:
+                            temp = self.s1[snapshot][index, :]
+                            temp[1] = 1
+                            temp = " ".join(map(str, temp))
+                            group_traj.write(temp+"\n")
+                        temp = self.s2[snapshot][list[-1], :]
+                        temp[1] = 1
+                        temp = " ".join(map(str, temp))
+                        group_traj.write(temp+"\n")
+            return
+
+        for i in range(self.n_snapshots):
+            molecules = []
+            indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=i)
+            for O_atom in  range(self.s2[i].shape[0]):
+                temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+                molecules.append(temp)
+
+            write_lammpstrj(molecules, timestep, i)
+
+
+        return
 
 
 if __name__ == "__main__":
-    file = 'water.lammpstrj'
-
+    #file = r'\Users\Nutzer\Documents\Python Scripts\water_traj.gro'
+    file = r'C:\Users\Nutzer\Documents\Python Scripts\trjwater.lammpstrj'
+    #file = "water.lammpstrj"
     traj = Trajectory(file)
     traj.get_box_size()
     traj.s1, traj.s2 = traj.split_species()
-    traj.indexlist, dist_1 = traj.get_neighbour_KDT(mode='pbc', snapshot=3)
-    #index, dist_2 = traj.get_neighbour_naive(mode='pbc', snapshot=3)
-    index, dist_2 = traj.get_neighbour_KDT(snapshot=3)
-    traj.get_water_hist(index)
-    traj.get_water_hist(traj.indexlist)
+    traj.indexlist, dist_1 = traj.get_neighbour_KDT(mode='pbc', snapshot=88)
+    #index, dist_2 = traj.get_neighbour_naive(mode='pbc', snapshot=2)
+    #index, dist_2 = traj.get_neighbour_KDT(snapshot=100)
+    #traj.get_water_hist(index)
+    #traj.get_water_hist(traj.indexlist)
+    print(traj.group_molecules(timestep=600000)) #TODO:: dont hardcoe timestep extract from original lammpstrj file
 
-    print(traj.box_size)
