@@ -87,7 +87,6 @@ class Trajectory:
     def lammpstrj_to_np(self):
         '''
         function to parse lammstrj format files to extract trajectories and return them in use able numpy data structures.
-
         :param file: string giving the lammpstrj file path
         :return: returns n_dim np array with the trajectory at each snapshot
         '''
@@ -206,7 +205,7 @@ class Trajectory:
         try:
             print(species_1.shape)
             if mode == 'normal':
-                tree = cKDTree(species_2[:, 2:], leafsize=species_2.shape[0])
+                tree = cKDTree(data=species_2[:, 2:], leafsize=species_2.shape[0])
             if mode == 'pbc':
                 tree = cKDTree(data=species_2[:, 2:], leafsize=species_2.shape[0], boxsize=self.box_size[snapshot])
 
@@ -222,7 +221,7 @@ class Trajectory:
             species_2 = species_2[snapshot]
 
             if mode == 'normal':
-                tree = cKDTree(species_2[:, 2:], leafsize=species_2.shape[0])
+                tree = cKDTree(data=species_2[:, 2:], leafsize=species_2.shape[0])
             if mode == 'pbc':
                 tree = cKDTree(data=species_2[:, 2:], leafsize=species_2.shape[0], boxsize=self.box_size[snapshot])
 
@@ -355,6 +354,8 @@ class Trajectory:
         plt.show()
         return
 
+    def get_ion_trajectory(self):
+        
 
 
 
