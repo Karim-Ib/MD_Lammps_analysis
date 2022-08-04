@@ -122,6 +122,8 @@ class Trajectory:
         for split in range(int(n_box / 3)):
             box_dim.append(np.stack((temp[(split*3) : (split*3 + 3)])))
 
+
+        #to compensate for the next(f) in the prior loop
         for key, line in enumerate(snap_lines):
             snap_lines[key] = line + key
         ### initialize np.arry of size (no of timesteps, no of atoms, 3d+id+species)
@@ -146,6 +148,8 @@ class Trajectory:
                     snap_count += 1
                     line_count = 0
                     print("Processing Snapshot:" + str(snap_count))
+
+                # is the = sign the reason the last element is missing??
                 if line_number >= ind_list[-1][-1]:
                     break
         return atom_list, box_dim, n_atoms
@@ -356,10 +360,10 @@ class Trajectory:
 
     def get_ion_trajectory(self):
         
+     return
 
 
-
-    def do_displace(self, ind, r=1.0, dr=0.05):
+    def do_displace(self, ind, r=0.1, dr=0.05):
         '''
         Method to displace a given hydrogen in the box
         :param ind: Int or list of Ints of elements to displace
