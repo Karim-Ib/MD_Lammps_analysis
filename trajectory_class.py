@@ -132,7 +132,7 @@ class Trajectory:
         ind_list = [np.zeros(0) for _ in range(snap_count)]
 
         for i in range(snap_count):
-            ind_list[i] = np.arange(snap_lines[i], snap_lines[i] + n_atoms - 1)
+            ind_list[i] = np.arange(snap_lines[i], snap_lines[i] + n_atoms )
         #print(ind_list)
         snap_count = 0
         line_count = 0
@@ -144,7 +144,7 @@ class Trajectory:
                 if any(line_number == ind_list[snap_count]):
                     atom_list[snap_count, line_count, :] = np.array([float(i) for i in line.split()])
                     line_count += 1
-                if line_count == n_atoms - 1:
+                if line_count == n_atoms :
                     snap_count += 1
                     line_count = 0
                     print("Processing Snapshot:" + str(snap_count))
