@@ -1,2 +1,6 @@
 
 grouped_water.lammpstrj
+*water*
+*.lammpstrj
+*.data
+*.lammpstrj
