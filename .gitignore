@@ -7,3 +7,5 @@ grouped_water.lammpstrj
 md_initials.rar
 *.lammpstrj
 .idea
+trajectories
+md_initials*
