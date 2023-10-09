@@ -1,0 +1,22 @@
+from src.water_md_class import  Trajectory
+
+def read_lammps_test(path, format="lammpstrj", scaled=1):
+    traj = Trajectory(path, format, scaled)
+
+    print("Trajectory first 3 rows")
+    print(traj.trajectory[0, :3, :])
+    print("box dimensions")
+    print(traj.box_dim[0])
+    print("box size")
+    print(traj.box_size[0])
+    print("number of atoms")
+    print(traj.n_atoms)
+    print("number of timesteps")
+    print(traj.n_snapshots)
+    print("species split")
+    print(traj.s1[0])
+    print(traj.s2[0])
+
+    return traj
+
+

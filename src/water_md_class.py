@@ -5,7 +5,7 @@ from sklearn.neighbors import KDTree
 from scipy.spatial import cKDTree
 from scipy.integrate import simpson, trapezoid
 import warnings, os
-from tools.helper_functions import get_distance, write_lammpstrj, get_p_vector, get_com, get_delta_phi_vector
+from src.tools.helper_functions import get_distance, write_lammpstrj, get_p_vector, get_com, get_delta_phi_vector
 
 class Trajectory:
     '''
@@ -530,7 +530,7 @@ class Trajectory:
         plt.show()
         return
 
-    def get_displace(self, snapshot=0, id=None, distance=0.05, eps=0.01, dp_factor=0.99,
+    def get_displace(self, snapshot=0, id=None, distance=0.05, eps=0.01,
                      path=None, num_traj=None):
         '''
         :param snapshot: index of the snapshot at which the displacement should happen
