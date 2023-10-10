@@ -7,21 +7,24 @@ import warnings, os
 from src.tools.md_class_functions import get_distance, write_lammpstrj, get_p_vector, get_com, get_delta_phi_vector
 
 class Trajectory:
-    '''
-    Class to parse, manipulate and plot the lammps-trajectory objects.
-    Takes one input argument 'file' which is the filepath of the .lammpstrj file to initialize
-    - added functionality to also parse gromac trajectory .gro files.
-    - TODO:: parse atom count from file instead of hardcode dummy -> only for gromac
-    '''
-
     def __init__(self, file: str, format: str='lammpstrj', scaled: int=1) -> None:
         '''
-        init of trajectory class
-        :param file: file path to get the trajectory from
-        :param format: default "lammpstrj", optional "gromac" or "XDATCAR"
-                NOTE: if you want to add more formats make sure to include the apropriate format_to_np() parsers
-                with the same output format as the included ones.
+        Class to parse, manipulate and plot the lammps-trajectory objects.
+        Initializes with:
+            - an list of both element species s1 - Hydrogen and s2 Oxygens.
+            - number of "snapshots" - time steps, n_snapshots, of the trajectory
+            - number of atoms in the trajectory, n_atoms
+            - the box dimensions box_dim(coordinates) and the size of the box, box_size
+
+        - added functionality to also parse gromac trajectory .gro files.
+        - TODO:: parse atom count from file instead of hardcode dummy -> only for gromac
+
+        :param file: path towards the trajectory file
+        :param format: format of the md trajectory, default is .lammpstrj
+        :param scaled: boolean if the trajectory file is already normalized to 1, default yes
+        - TODO:: change scaled to an actual boolean
         '''
+
         self.file = file
         if format == 'lammpstrj':
             self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np(scaled)
@@ -216,10 +219,10 @@ class Trajectory:
 
     def lammpstrj_to_np(self, scal: int=1) -> (np.ndarray, [np.ndarray], [int]):
         '''
-        function to parse lammstrj format files to extract trajectories and return them in useable numpy data structures.
-        :param file: string giving the lammpstrj file path
-        :return: returns n_dim np array with the trajectory at each snapshot
-            '''
+        Parser for trajectories of the .lammpstrj format.
+        :param scal: int, decides if data is scaled or not. default yes
+        :return: tuple of atom_list, box_dim and n_atoms
+        '''
 
         # might be usefull to know total no. of lines later on
         n_lines = sum(1 for line in open(self.file))
@@ -296,6 +299,11 @@ class Trajectory:
         return atom_list, box_dim, n_atoms
 
     def set_scale_to_lammps(self, scal: int) -> None:
+        '''
+        Setter function to scale self.trajectory. Also brings back "out-of-the-box" atoms back into [1, 1, 1]
+        :param scal: int, decides if data is scaled or not. default yes
+        :return: None
+        '''
         for i in range(len(self.box_dim)):
             self.trajectory[i, :, 2] /= self.box_size[i][0]
             self.trajectory[i, :, 3] /= self.box_size[i][1]
@@ -309,8 +317,8 @@ class Trajectory:
 
     def set_box_size(self) -> None:
         '''
-        function to determine the actual box size given the box_dimensions extracted from the lammpstrj file
-        :return: list of box_size - lengths - (x, y, z) for each snapshot.
+        setter function to determine the actual box size given the box_dimensions extracted from the lammpstrj file
+        :return: None
         '''
 
         self.box_size = [None] * self.n_snapshots
@@ -498,11 +506,11 @@ class Trajectory:
 
         return None
 
-    def get_water_hist(self, index_list: np.ndarray=None) -> None:
+    def plot_water_hist(self, index_list: np.ndarray=None) -> None:
         '''
-        Quick Wraperfunction for pyplot OOP APi to draw a histogram of H-Bond distribution
+        Quick Wraperfunction for pyplot to draw a histogram of H-Bond distribution
         :param index_list: list of indexes for NN of the H-Atoms
-        :return: Plot of the Histogram
+        :return: None
         '''
 
         if index_list is None:
@@ -528,9 +536,10 @@ class Trajectory:
         plt.show()
         return
 
-    def get_displace(self, snapshot=0, id=None, distance=0.05, eps=0.01,
-                     path=None, num_traj=None):
+    def get_displace(self, snapshot: int=0, id: int=None, distance: float=0.05, eps: float=0.01,
+                     path: str=None, num_traj: int=None):
         '''
+        Method to generate an ionized watertrajectory by displacing one hydrogen to get H3O/OH
         :param snapshot: index of the snapshot at which the displacement should happen
         :param id: id of the reference oxygen if none is given one will be picked at random
         :param distance: distance to where we want to displace to (searching for an oxygen
@@ -541,7 +550,7 @@ class Trajectory:
         :param path: Optional path to safe the file in, otherwise it will be safed in the current directory
         :param name: Optional file name, otherwise it will be called "water.data"
         :param num_traj: Optional number of different trajectories to be generated
-        :return: trajectory with one Oxygen removed and one Hydrogen displaced
+        :return: trajectory with one Hydrogen displaced
         '''
 
         def get_displaced_H(H_displace, H_pair, reference_O):
