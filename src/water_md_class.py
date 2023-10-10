@@ -4,7 +4,7 @@ import regex
 from scipy.spatial import cKDTree
 from scipy.integrate import trapezoid
 import warnings, os
-from src.tools.helper_functions import get_distance, write_lammpstrj, get_p_vector, get_com, get_delta_phi_vector
+from src.tools.md_class_functions import get_distance, write_lammpstrj, get_p_vector, get_com, get_delta_phi_vector
 
 class Trajectory:
     '''
