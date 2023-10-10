@@ -15,7 +15,7 @@ class Trajectory:
     - TODO:: parse atom count from file instead of hardcode dummy -> only for gromac
     '''
 
-    def __init__(self, file, format='lammpstrj', scaled=1):
+    def __init__(self, file: str, format: str='lammpstrj', scaled: int=1) -> None:
         '''
         init of trajectory class
         :param file: file path to get the trajectory from
@@ -37,14 +37,14 @@ class Trajectory:
         self.set_box_size()
 
         if scaled == 0:
-            self.scale_to_lammps(scaled)
+            self.set_scale_to_lammps(scaled)
 
         self.s1, self.s2 = self.get_split_species()
         self.indexlist = 0
         self.distance = 0
         self.ion_distance = 0
 
-    def xdatcar_to_np(self):
+    def xdatcar_to_np(self) -> (np.ndarray, np.ndarray):
         '''
         Method to parse vasp-xdatcar style formated trajectories
         :param file: string giving the XDATCAR file path
@@ -101,7 +101,7 @@ class Trajectory:
                     break
         return atom_list, box_list
 
-    def lammps_data_to_np(self, scal=1):
+    def lammps_data_to_np(self, scal: int=1) -> ([np.ndarray], [np.ndarray], [int]):
         '''
         Method to parse lammps data-format trajectories
         :return: returns n_dim np array with the trajectory at each snapshot and a list of the current box dimensions
@@ -163,7 +163,7 @@ class Trajectory:
         print(box_dim)
         return atom_list, box_dim, n_atoms
 
-    def gromac_to_np(self):
+    def gromac_to_np(self) -> (np.ndarray, [np.ndarray]):
         '''
         Method to parse gromac style formated trajectories
         :param file: string giving the lammpstrj file path
@@ -215,7 +215,7 @@ class Trajectory:
                     break
         return atom_list, box_dim
 
-    def lammpstrj_to_np(self, scal=1):
+    def lammpstrj_to_np(self, scal: int=1) -> (np.ndarray, [np.ndarray], [int]):
         '''
         function to parse lammstrj format files to extract trajectories and return them in useable numpy data structures.
         :param file: string giving the lammpstrj file path
@@ -299,7 +299,7 @@ class Trajectory:
 
         return atom_list, box_dim, n_atoms
 
-    def scale_to_lammps(self, scal):
+    def set_scale_to_lammps(self, scal: int) -> None:
         for i in range(len(self.box_dim)):
             self.trajectory[i, :, 2] /= self.box_size[i][0]
             self.trajectory[i, :, 3] /= self.box_size[i][1]
@@ -311,7 +311,7 @@ class Trajectory:
             temp = self.trajectory[:, :, 2:] < 0
             self.trajectory[:, :, 2:][temp] = self.trajectory[:, :, 2:][temp] + 1
 
-    def set_box_size(self):
+    def set_box_size(self) -> None:
         '''
         function to determine the actual box size given the box_dimensions extracted from the lammpstrj file
         :return: list of box_size - lengths - (x, y, z) for each snapshot.
@@ -322,7 +322,7 @@ class Trajectory:
         for i in range(self.n_snapshots):
             self.box_size[i] = abs(self.box_dim[i][:, 0] - self.box_dim[i][:, 1])
 
-    def get_split_species(self):
+    def get_split_species(self) -> ([np.ndarray], [np.ndarray]):
         '''
         routine to split a lammpstrj which is formated as a np.ndim array of the form (n_steps, n_particles, n_cols=5)
         into its seperate particles (assuming Water-Molecules)
@@ -340,7 +340,8 @@ class Trajectory:
 
         return out_1, out_2
 
-    def get_neighbour_KDT(self, species_1=None, species_2=None, mode='normal', snapshot=0):
+    def get_neighbour_KDT(self, species_1: np.ndarray=None, species_2: np.ndarray=None, mode: str='normal', snapshot: int=0) \
+            -> (np.ndarray, np.ndarray):
         '''
         Routin using sklearns implementation of the KDTree datastructure for quick nearestneighbour search in O(log(n))
         compared to the naive O(N) approach
@@ -376,7 +377,7 @@ class Trajectory:
 
         except (AttributeError, TypeError) as error:
 
-            print("Atribute Error occured(recieved list instead of numpy array) using first element of list instead")
+            print(f"Atribute Error occured(recieved list instead of numpy array) using {snapshot} element of the list")
             species_1 = species_1[snapshot]
             species_2 = species_2[snapshot]
 
@@ -396,7 +397,8 @@ class Trajectory:
 
         return ind_out, dist_out
 
-    def get_neighbour_naive(self, species_1=None, species_2=None, mode='normal', snapshot=0):
+    def get_neighbour_naive(self, species_1: np.ndarray=None, species_2: np.ndarray=None, mode: str='normal', snapshot: int=0) \
+            -> (np.ndarray, np.ndarray):
         '''
         Naive approach in calculating the nearest neighbour in linear time O(N) no optimizations done!
         :param species_1: 2D numpy array of the positions of particles from species1 (n_row, (index, species, x, y, z))
@@ -448,7 +450,7 @@ class Trajectory:
 
         return index, distances
 
-    def get_ion_distance(self):
+    def get_ion_distance(self) -> np.ndarray:
         '''
         Method to calculate the euclidean distance between the two ions at each timestep, based on the
         distance of the OH- , H3O+ Oxygen Atoms.
@@ -500,7 +502,7 @@ class Trajectory:
 
         return None
 
-    def get_water_hist(self, index_list=None):
+    def get_water_hist(self, index_list: np.ndarray=None) -> None:
         '''
         Quick Wraperfunction for pyplot OOP APi to draw a histogram of H-Bond distribution
         :param index_list: list of indexes for NN of the H-Atoms
@@ -723,7 +725,7 @@ class Trajectory:
                         distances.append(temp)
                         print("distance too far, trying next O")
 
-    def cut_snapshot(self, snapshot=0, path=None):
+    def cut_snapshot(self, snapshot: int=0, path: str=None) -> None:
         '''
         Method to remove a single time-frame from an entire trajectory for usage as an input for a new md run.
         :param snapshot: the frame at which point in time should be cut, default=0
@@ -772,7 +774,7 @@ class Trajectory:
                                  f'{O_list[O_ind, 2]*self.box_size[snapshot][2]}')
                 input_traj.write('\n')
 
-    def remove_atoms(self, N=1, snap=0, atom_id=None, format_out="lammps"):
+    def remove_atoms(self, N: int=1, snap: int=0, atom_id: int=None, format_out: str="lammps") -> None:
         '''
         Method to remove molecules from a given trajectory. New trajectory will be safed as "reduced_water.format"
         in the current folder. For N=0 this can be used to simply change the format i.e lammps>XDATCAR
@@ -864,7 +866,7 @@ class Trajectory:
             warnings.warn("not supported format_out please check documentation for viable formats")
             return
 
-    def group_molecules(self, timestep=5000, path=None):
+    def group_molecules(self, timestep: int=5000, path: str=None) -> None:
         '''
         method to group nearest neighbours back to molecules to track their trajectory in time
         :param timestep: step range at which distance simulation results are printed
@@ -890,7 +892,7 @@ class Trajectory:
                             s1=self.s1, s2=self.s2)
         return None
 
-    def get_radial_diffusion(self, timestep=0.0005):
+    def get_radial_diffusion(self, timestep: int=0.0005) -> np.ndarray:
         '''
         method to calculate the radial diffusion coefficient based on 10.1103/PhysRevE.76.031203
         currently only supports non ionic water without hydrogen exchange.
