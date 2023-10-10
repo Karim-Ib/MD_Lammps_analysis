@@ -5,7 +5,7 @@ import matplotlib.ticker as mtick
 from src.water_md_class import Trajectory
 
 
-def get_distance(x, y, img=None, box=None, mode='normal'):
+def get_distance(x: list, y: list, img: int=None, box: int=None, mode: str='normal') -> float:
     #TODO: check if img, box parameters are needed since we normalize anyways box should always be [1,1,1] for
     # each snapshot
     '''
@@ -42,7 +42,8 @@ def get_distance(x, y, img=None, box=None, mode='normal'):
         raise ValueError(f'mode {mode} unknown please use either \'normal\' or \'pbc\'')
 
 
-def write_lammpstrj(molecules, ts=5000, snapshot=0, _dir=None, n_atoms=0, box_dim=None, s1=None, s2=None):
+def write_lammpstrj(molecules: [np.ndarray], ts: int=5000, snapshot:int =0, _dir: str=None, n_atoms: int=0,
+                    box_dim: [np.ndarray]=None, s1: [np.ndarray]=None, s2: [np.ndarray]=None):
     if _dir is not None:
         with open(_dir+"grouped_water.lammpstrj", "a") as group_traj:
             group_traj.write('ITEM: TIMESTEP\n')
@@ -172,7 +173,7 @@ def write_lammpstrj(molecules, ts=5000, snapshot=0, _dir=None, n_atoms=0, box_di
         return None
 
 
-def get_com(H_1, H_2, O):
+def get_com(H_1: [np.ndarray], H_2: [np.ndarray], O: [np.ndarray]) -> np.ndarray:
 
     '''
     helper function to quickly calculate the CoM of each H2O molecule based on the unit circle transform

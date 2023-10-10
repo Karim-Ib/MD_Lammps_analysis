@@ -1,9 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import regex
-from sklearn.neighbors import KDTree
 from scipy.spatial import cKDTree
-from scipy.integrate import simpson, trapezoid
+from scipy.integrate import trapezoid
 import warnings, os
 from src.tools.helper_functions import get_distance, write_lammpstrj, get_p_vector, get_com, get_delta_phi_vector
 
@@ -289,13 +288,10 @@ class Trajectory:
 
         ##renormalize coordinates using pbc if neccesary
         if scal == 1:
-
-
             temp = atom_list[:, :, 2:] >= 1
             atom_list[:, :, 2:][temp] = atom_list[:, :, 2:][temp] - 1
             temp = atom_list[:, :, 2:] < 0
             atom_list[:, :, 2:][temp] = atom_list[:, :, 2:][temp] + 1
-
 
         return atom_list, box_dim, n_atoms
 
