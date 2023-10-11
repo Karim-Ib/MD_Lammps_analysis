@@ -16,7 +16,10 @@ def read_lammps_test(path, format="lammpstrj", scaled=1):
     print("species split")
     print(traj.s1[0])
     print(traj.s2[0])
+    print("Recombination Time")
+    print(traj.recombination_time)
 
     return traj
+
 
 

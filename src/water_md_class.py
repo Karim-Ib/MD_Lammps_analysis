@@ -15,6 +15,7 @@ class Trajectory:
             - number of "snapshots" - time steps, n_snapshots, of the trajectory
             - number of atoms in the trajectory, n_atoms
             - the box dimensions box_dim(coordinates) and the size of the box, box_size
+            - snapshot at which point recombination happens (rectombination_time)
 
         - added functionality to also parse gromac trajectory .gro files.
         - TODO:: parse atom count from file instead of hardcode dummy -> only for gromac
@@ -45,6 +46,7 @@ class Trajectory:
         self.indexlist = 0
         self.distance = 0
         self.ion_distance = 0
+        self.recombination_time = self.get_recombination_time()
 
     def xdatcar_to_np(self) -> (np.ndarray, np.ndarray):
         '''
@@ -555,9 +557,9 @@ class Trajectory:
 
         def get_displaced_H(H_displace, H_pair, reference_O):
             '''
-            helper function to find the coordinates of the displaced H Atom by finding the midpoint between the Bondingatoms of
-            the reference O atom and then mirroring this point in space, while making sure the distance between the displaced H
-            and the reference O is smaler then the distance fo the O to its closest bonding H
+            helper function to find the coordinates of the displaced H Atom by finding the midpoint between the
+            Bondingatoms of the reference O atom and then mirroring this point in space, while making sure the distance
+            between the displaced H and the reference O is smaler then the distance fo the O to its closest bonding H
             '''
 
             minimum_distance = np.min([get_distance(H_pair[0], reference_O), get_distance(H_pair[1], reference_O)])
@@ -889,7 +891,7 @@ class Trajectory:
         for i in range(self.n_snapshots):
             molecules = []
             indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=i)
-            for O_atom in  range(self.s2[i].shape[0]):
+            for O_atom in range(self.s2[i].shape[0]):
                 temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
                 molecules.append(temp)
 
@@ -973,4 +975,24 @@ class Trajectory:
 
         rot_msd_list = rot_msd_list / len(molecule_list)
         return rot_msd_list
+
+    def get_recombination_time(self) -> int:
+        '''
+        Method to determine the time in the trajectory where the ions recombine.
+        - todo:: uses alot of the group_molecules method, be smart about resuing code
+        :return recombination_time: time when the ions recombine
+        '''
+
+        for i in range(self.n_snapshots):
+            molecules = []  # todo:: i do know the size of the list, initialize instead of appending?
+            indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=i)
+            for O_atom in range(self.s2[i].shape[0]):
+                temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+                molecules.append(temp)
+            recombination_time = i
+            if all([len(_list) for _list in molecules]) == 3:
+                return recombination_time
+
+        print("Trajectory did not recombine")
+        return self.n_snapshots
 
