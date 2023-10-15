@@ -15,7 +15,7 @@ def get_distance(x: list, y: list, img: int=None, box: int=None, mode: str='norm
     '''
 
     if mode == 'normal':
-        return np.linalg.norm(x-y)
+        return np.linalg.norm(x - y)
     if mode == 'pbc':
         box = [1, 1, 1]
         dist = x - y
@@ -250,3 +250,40 @@ def get_delta_phi_vector(p: np.ndarray, p_t: np.ndarray) -> np.ndarray:
     return pre_factor * phi
 
 
+def get_com_dynamic(molecules: list, H_pos: np.ndarray, O_pos: np.ndarray) -> np.ndarray:
+    '''
+    helper function to calculate the center of mass of the water molecules. taks into account
+    periodict boundary conditions and does calculation dynamically depending the molecule type
+    (H2O, OH-, H3O+)
+    :param molecules: list of atoms which represent a molecule
+    :param trajectory:
+    :param H_pos: array of hydrogen atom coordinates
+    :param O_pos: array of oxygen atom coordinates
+    :return: array of the com of all molecules
+    '''
+    com = np.empty((len(molecules), 3))
+    m_H = 1.00784 # values in u
+    m_O = 15.999
+
+    for ind, mol in enumerate(molecules):
+        len_check = len(mol)
+
+        if len_check == 2:      #oh
+            temp = (H_pos[mol[0],2:] * m_H + O_pos[mol[1], 2:] * m_O) / (m_H + m_O)
+        elif len_check == 3:    #h2o
+            temp = (H_pos[mol[0], 2:] * m_H + H_pos[mol[1], 2:] * m_H + O_pos[mol[2], 2:]
+                    * m_O) / (2 * m_H + m_O)
+        elif len_check == 4:    #h3o
+            temp = (H_pos[mol[0], 2:] * m_H + H_pos[mol[1], 2:] * m_H + H_pos[mol[2], 2:]
+                    * m_H + O_pos[mol[3], 2:] * m_O) / (3 * m_H + m_O)
+
+        if temp[0] > 1.0: temp[0] =- 1
+        if temp[0] < 0.0: temp[0] =+ 1
+        if temp[1] > 1.0: temp[1] =- 1
+        if temp[1] < 0.0: temp[1] =+ 1
+        if temp[2] > 1.0: temp[2] =- 1
+        if temp[2] < 0.0: temp[2] =+ 1
+
+        com[ind, :] = temp
+
+    return com

@@ -1,13 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import regex
+import string
 from scipy.spatial import cKDTree
 from scipy.integrate import trapezoid
 import warnings, os
 from src.tools.md_class_functions import get_distance, write_lammpstrj, get_p_vector, get_com, get_delta_phi_vector
+from src.tools.md_class_functions import get_com_dynamic
+
 
 class Trajectory:
-    def __init__(self, file: str, format: str='lammpstrj', scaled: int=1) -> None:
+    def __init__(self, file: str, format: str = 'lammpstrj', scaled: int = 1, verbosity: str="silent") -> None:
         '''
         Class to parse, manipulate and plot the lammps-trajectory objects.
         Initializes with:
@@ -23,10 +26,12 @@ class Trajectory:
         :param file: path towards the trajectory file
         :param format: format of the md trajectory, default is .lammpstrj
         :param scaled: boolean if the trajectory file is already normalized to 1, default yes
+        :param verbosity: string ["silent", "loud"], decides whether log messages are printed, default: "silent"
         - TODO:: change scaled to an actual boolean
         '''
 
         self.file = file
+        self.verbosity = verbosity.lower()
         if format == 'lammpstrj':
             self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np(scaled)
         if format == 'lammps_data':
@@ -46,7 +51,8 @@ class Trajectory:
         self.indexlist = 0
         self.distance = 0
         self.ion_distance = 0
-        self.recombination_time = self.get_recombination_time()
+        self.recombination_time, self.did_recombine = self.get_recombination_time()
+
 
     def xdatcar_to_np(self) -> (np.ndarray, np.ndarray):
         '''
@@ -65,21 +71,18 @@ class Trajectory:
                 if regex.match("Direct", line):
                     snap_count += 1
                     snap_lines.append(line_number + 1)
-                    #print(snap_count)
                 if line_number == 6:
                     n_atoms = sum([int(i) for i in line.split()])
                     next
 
-        atom_list = np.zeros((snap_count, n_atoms , 5))
+        atom_list = np.zeros((snap_count, n_atoms, 5))
         ind_list = [np.zeros(0) for _ in range(snap_count)]
         box_ind_list = [np.zeros(0) for _ in range(snap_count)]
         box_list = np.zeros((snap_count, 3, 3))
         box_lines = [i - 6 for i in snap_lines]
         for i in range(snap_count):
-            ind_list[i] = np.arange(snap_lines[i], snap_lines[i] + n_atoms )
-            box_ind_list[i] = np.arange(box_lines[i], box_lines[i] +3)
-
-
+            ind_list[i] = np.arange(snap_lines[i], snap_lines[i] + n_atoms)
+            box_ind_list[i] = np.arange(box_lines[i], box_lines[i] + 3)
 
         snap_count = 0
         line_count = 0
@@ -88,24 +91,23 @@ class Trajectory:
             for line_number, line in enumerate(f):
 
                 if any(line_number == box_ind_list[snap_count]):
-                    #print(line.split())
-                    box_list[snap_count, :]=np.array([float(i) for i in line.split()])
+                    box_list[snap_count, :] = np.array([float(i) for i in line.split()])
 
                 if any(line_number == ind_list[snap_count]):
                     atom_list[snap_count, line_count, 2:] = np.array([float(i) for i in line.split()])
                     ### need way to distinguish O and H's in Vasps XDATCAR file
-                    print(atom_list[snap_count, line_count, :])
+                    if self.verbosity == "loud":
+                        print(atom_list[snap_count, line_count, :])
 
                     line_count += 1
                 if line_count == n_atoms:
                     snap_count += 1
                     line_count = 0
-                    #print(snap_count)
                 if line_number >= ind_list[-1][-1]:
                     break
         return atom_list, box_list
 
-    def lammps_data_to_np(self, scal: int=1) -> ([np.ndarray], [np.ndarray], [int]):
+    def lammps_data_to_np(self, scal: int = 1) -> ([np.ndarray], [np.ndarray], [int]):
         '''
         Method to parse lammps data-format trajectories
         :return: returns n_dim np array with the trajectory at each snapshot and a list of the current box dimensions
@@ -120,29 +122,25 @@ class Trajectory:
         box_dim = []
         atom_list = []
 
-
         with open(self.file) as f:
 
             for snap, line in enumerate(f):
 
-
                 if regex.match('[0-9]+ atoms', line):
-                    print(line)
+                    if self.verbosity == "loud":
+                        print(line)
                     n_atoms.append(int(line.split()[0]))
-                    print(n_atoms)
+                    if self.verbosity == "loud":
+                        print(n_atoms)
                     n_atoms = n_atoms[-1]
-
-
-
 
                 if snap > 4 and snap < 8:
                     box_dim.append(np.array([float(i) for i in line.split()[:2]]))
 
-                #todo: fix the regexp.match issue between windows and linux
-                #n_atoms=384
+                # todo: fix the regexp.match issue between windows and linux
+                # n_atoms=384
                 if snap > 16 and snap < 16 + n_atoms + 1:
                     atom_list.append(np.array([float(i) for i in line.split()[:5]]))
-
 
         # transform list of box information into useful square data format.
 
@@ -151,20 +149,17 @@ class Trajectory:
         box_dim.append(np.stack(temp))
         temp = atom_list
         atom_list = np.stack(temp).reshape((1, 384, 5))
-
-        print(atom_list.shape)
+        if self.verbosity == "loud":
+            print(atom_list.shape)
 
         ##renormalize coordinates using pbc if neccesary -> only if data is in scaled lammps coordinates [0,1]
         if scal == 1:
-
-
             temp = atom_list[:, :, 2:] >= 1
             atom_list[:, :, 2:][temp] = atom_list[:, :, 2:][temp] - 1
             temp = atom_list[:, :, 2:] < 0
             atom_list[:, :, 2:][temp] = atom_list[:, :, 2:][temp] + 1
-
-
-        print(box_dim)
+        if self.verbosity == "loud":
+            print(f'box dimensions: {box_dim}')
         return atom_list, box_dim, n_atoms
 
     def gromac_to_np(self) -> (np.ndarray, [np.ndarray]):
@@ -174,10 +169,9 @@ class Trajectory:
         :return: returns n_dim np array with the trajectory at each snapshot and a list of the current box dimensions
         '''
 
-
         snap_count = 0
         snap_lines = []
-        n_atoms = 384   ###TODO: fix hard-code at some point
+        n_atoms = 384  ###TODO: fix hard-code at some point
 
         with open(self.file) as f:
             for snap, line in enumerate(f):
@@ -185,13 +179,12 @@ class Trajectory:
                     snap_lines.append(snap + 2)
                     snap_count += 1
 
-            atom_list = np.zeros((snap_count, n_atoms , 5))
+            atom_list = np.zeros((snap_count, n_atoms, 5))
             ind_list = [np.zeros(0) for _ in range(snap_count)]
 
             for i in range(snap_count):
-                ind_list[i] = np.arange(snap_lines[i], snap_lines[i] + n_atoms )
+                ind_list[i] = np.arange(snap_lines[i], snap_lines[i] + n_atoms)
 
-        #print(ind_list)
         snap_count = 0
         line_count = 0
         box_dim = []
@@ -214,12 +207,13 @@ class Trajectory:
                 if line_count == n_atoms:
                     snap_count += 1
                     line_count = 0
-                    print(snap_count)
+                    if self.verbosity == "loud":
+                        print(snap_count)
                 if line_number >= ind_list[-1][-1]:
                     break
         return atom_list, box_dim
 
-    def lammpstrj_to_np(self, scal: int=1) -> (np.ndarray, [np.ndarray], [int]):
+    def lammpstrj_to_np(self, scal: int = 1) -> (np.ndarray, [np.ndarray], [int]):
         '''
         Parser for trajectories of the .lammpstrj format.
         :param scal: int, decides if data is scaled or not. default yes
@@ -237,23 +231,20 @@ class Trajectory:
         snap_lines = []
         box_dim = []
 
-
         with open(self.file) as f:
             for snap, line in enumerate(f):
                 if regex.match('ITEM: ATOMS id', line):
                     snap_lines.append(snap + 2)
                     snap_count += 1
                 if regex.match('ITEM: NUMBER OF ATOMS', line):
-
                     n_atoms.append(int(next(f)))
                 if box_lines > 0:
                     box_lines -= 1
                     box_dim.append(np.array([float(i) for i in line.split()]))
                 if regex.match('ITEM: BOX BOUNDS', line):
                     box_lines = 3
-            # print(snap_count, snap_lines, n_atoms)
 
-        #super hacky fix should work for now but todo:better solution
+        # super hacky fix should work for now but todo:better solution
         n_atoms = n_atoms[0]
 
         # transform list of box information into useful square data format.
@@ -272,7 +263,6 @@ class Trajectory:
 
         for i in range(snap_count):
             ind_list[i] = np.arange(snap_lines[i], snap_lines[i] + n_atoms)
-        # print(ind_list)
         snap_count = 0
         line_count = 0
         with open(self.file) as f:
@@ -285,7 +275,8 @@ class Trajectory:
                 if line_count == n_atoms:
                     snap_count += 1
                     line_count = 0
-                    print("Processing Snapshot:" + str(snap_count))
+                    if self.verbosity == "loud":
+                        print("Processing Snapshot:" + str(snap_count))
                 if line_number >= ind_list[-1][-1]:
                     break
             for line in f:
@@ -346,7 +337,8 @@ class Trajectory:
 
         return out_1, out_2
 
-    def get_neighbour_KDT(self, species_1: np.ndarray=None, species_2: np.ndarray=None, mode: str='normal', snapshot: int=0) \
+    def get_neighbour_KDT(self, species_1: np.ndarray = None, species_2: np.ndarray = None, mode: str = 'normal',
+                          snapshot: int = 0) \
             -> (np.ndarray, np.ndarray):
         '''
         Routin using sklearns implementation of the KDTree datastructure for quick nearestneighbour search in O(log(n))
@@ -360,15 +352,14 @@ class Trajectory:
                 the euclidean distance
         '''
 
-        #workaround to set instance atributes as default argument
+        # workaround to set instance atributes as default argument
         if species_1 is None:
             species_1 = self.s1
         if species_2 is None:
             species_2 = self.s2
-            #if species_1 or species_2 == 0:
-            #raise ValueError('set self.s1 or self.s2 first or pass required arguments')
+            # if species_1 or species_2 == 0:
+            # raise ValueError('set self.s1 or self.s2 first or pass required arguments')
         try:
-            #print(species_1.shape)
             if mode == 'normal':
                 tree = cKDTree(data=species_2[:, 2:] * self.box_size[snapshot], leafsize=species_2.shape[0])
             if mode == 'pbc':
@@ -382,8 +373,8 @@ class Trajectory:
                 dist_out[i], ind_out[i] = tree.query((species_1[i, 2:] * self.box_size[snapshot]).reshape(1, -1), k=1)
 
         except (AttributeError, TypeError) as error:
-
-            print(f"Atribute Error occured(recieved list instead of numpy array) using {snapshot} element of the list")
+            if self.verbosity == "loud":
+                print(f"Atribute Error occured(recieved list instead of numpy array) using {snapshot} element of the list")
             species_1 = species_1[snapshot]
             species_2 = species_2[snapshot]
 
@@ -403,7 +394,8 @@ class Trajectory:
 
         return ind_out, dist_out
 
-    def get_neighbour_naive(self, species_1: np.ndarray=None, species_2: np.ndarray=None, mode: str='normal', snapshot: int=0) \
+    def get_neighbour_naive(self, species_1: np.ndarray = None, species_2: np.ndarray = None, mode: str = 'normal',
+                            snapshot: int = 0) \
             -> (np.ndarray, np.ndarray):
         '''
         Naive approach in calculating the nearest neighbour in linear time O(N) no optimizations done!
@@ -436,8 +428,8 @@ class Trajectory:
                 distances[H] = distance_matrix[H, index[H]]
 
         except AttributeError:
-
-            print("Atribute Error occured(recieved list instead of numpy array) using indexed element of list instead")
+            if self.verbosity == "loud":
+                print("Atribute Error occured(recieved list instead of numpy array) using indexed element of list instead")
             species_1 = species_1[snapshot] * self.box_size[snapshot]
             species_2 = species_2[snapshot] * self.box_size[snapshot]
             n_row_1 = species_1.shape[0]
@@ -476,8 +468,8 @@ class Trajectory:
 
             # note: find he  number of  occourence of O atoms for which it is the nearest to an H atom.
             # -> for H2O each O atom will count twice, for each H3O+ each O atom will count 3 times and so on.
-            temp = [None]*self.s2[i].shape[0]
-            for O_atom in  range(self.s2[i].shape[0]):
+            temp = [None] * self.s2[i].shape[0]
+            for O_atom in range(self.s2[i].shape[0]):
                 temp[O_atom] = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
 
             # check how often each O atom counted -> molecules formation  OH- = 1 time H3O+  3 Times  H2O 2 times.
@@ -508,7 +500,7 @@ class Trajectory:
 
         return None
 
-    def plot_water_hist(self, index_list: np.ndarray=None) -> None:
+    def plot_water_hist(self, index_list: np.ndarray = None) -> None:
         '''
         Quick Wraperfunction for pyplot to draw a histogram of H-Bond distribution
         :param index_list: list of indexes for NN of the H-Atoms
@@ -538,8 +530,8 @@ class Trajectory:
         plt.show()
         return
 
-    def get_displace(self, snapshot: int=0, id: int=None, distance: float=0.05, eps: float=0.01,
-                     path: str=None, num_traj: int=None):
+    def get_displace(self, snapshot: int = 0, id: int = None, distance: float = 0.05, eps: float = 0.01,
+                     path: str = None, num_traj: int = None):
         '''
         Method to generate an ionized watertrajectory by displacing one hydrogen to get H3O/OH
         :param snapshot: index of the snapshot at which the displacement should happen
@@ -567,9 +559,9 @@ class Trajectory:
             mid_vector = midpoint - reference_O
 
             new_H = midpoint - 2 * mid_vector
-            while (get_distance(new_H, reference_O, mode="pbc") < 1.1*minimum_distance) :
-                new_H -= 0.05*mid_vector
-                if get_distance(new_H, reference_O) >= 1.2*minimum_distance:
+            while (get_distance(new_H, reference_O, mode="pbc") < 1.1 * minimum_distance):
+                new_H -= 0.05 * mid_vector
+                if get_distance(new_H, reference_O) >= 1.2 * minimum_distance:
                     return new_H
             return new_H
 
@@ -599,12 +591,12 @@ class Trajectory:
                 if (temp <= (distance + eps)) and (temp >= (distance - eps)):
                     displace_H = H_list[np.argwhere(self.indexlist == i)[0], :]
 
-                    # displace the H towards the reference O
-                    print("displaced")
+                    if self.verbosity == "loud":
+                        print("displaced")
                     displace_H = get_displaced_H(displace_H, reference_H, reference_O)
-                    #O_list = np.delete(O_list, i, axis=0) -> if we want to remove an O (not sure if we do?)
+                    # O_list = np.delete(O_list, i, axis=0) -> if we want to remove an O (not sure if we do?)
 
-                    #update the hydrogen list with the new displaced coordinates
+                    # update the hydrogen list with the new displaced coordinates
                     H_list[np.argwhere(self.indexlist == i)[0], :] = displace_H
 
                     # renormalize coordinates using pbc if neccesary
@@ -633,22 +625,24 @@ class Trajectory:
                         input_traj.write('\n')
 
                         for H_ind in range(H_list.shape[0]):
-                            input_traj.write(f'{H_ind + 1} 1 {H_list[H_ind, 0]*self.box_size[snapshot][0]} '
-                                             f'{H_list[H_ind, 1]*self.box_size[snapshot][1]} '
-                                             f'{H_list[H_ind, 2]*self.box_size[snapshot][2]}')
+                            input_traj.write(f'{H_ind + 1} 1 {H_list[H_ind, 0] * self.box_size[snapshot][0]} '
+                                             f'{H_list[H_ind, 1] * self.box_size[snapshot][1]} '
+                                             f'{H_list[H_ind, 2] * self.box_size[snapshot][2]}')
                             input_traj.write('\n')
                         for O_ind in range(O_list.shape[0]):
-                            input_traj.write(f'{O_ind + 1 + H_list.shape[0] } 2 '
-                                             f'{O_list[O_ind, 0]*self.box_size[snapshot][0]} '
-                                             f'{O_list[O_ind, 1]*self.box_size[snapshot][1]} '
-                                             f'{O_list[O_ind, 2]*self.box_size[snapshot][2]}')
+                            input_traj.write(f'{O_ind + 1 + H_list.shape[0]} 2 '
+                                             f'{O_list[O_ind, 0] * self.box_size[snapshot][0]} '
+                                             f'{O_list[O_ind, 1] * self.box_size[snapshot][1]} '
+                                             f'{O_list[O_ind, 2] * self.box_size[snapshot][2]}')
                             input_traj.write('\n')
-
-                    return print(f"trajectory saved under {water_file}")
+                    if self.verbosity == "loud":
+                        print(f"trajectory saved under {water_file}")
+                    return None
 
                 else:
                     distances.append(temp)
-                    print("distance too far, trying next O")
+                    if self.verbosity == "loud":
+                        print("distance too far, trying next O")
 
         if num_traj is not None:
             if isinstance(num_traj, int):
@@ -679,13 +673,13 @@ class Trajectory:
                     if (temp <= distance + eps) and (temp >= distance - eps):
                         displace_H = H_list[np.argwhere(self.indexlist == i)[0], :]
 
-
                         # displace the H towards the reference O
-                        print("displace")
+                        if self.verbosity == "loud":
+                            print("displace")
                         displace_H = get_displaced_H(displace_H, reference_H, reference_O)
                         # O_list = np.delete(O_list, i, axis=0) -> if we want to remove an O (not sure if we do?)
 
-                        #update the hydrogen list with the new displaced coordinates
+                        # update the hydrogen list with the new displaced coordinates
                         H_list[np.argwhere(self.indexlist == i)[0], :] = displace_H
 
                         # renormalize coordinates using pbc if neccesary
@@ -715,24 +709,25 @@ class Trajectory:
                             input_traj.write('\n')
 
                             for H_ind in range(H_list.shape[0]):
-                                input_traj.write(f'{H_ind + 1} 1 {H_list[H_ind, 0]*self.box_size[snapshot][0]}'
-                                                 f' {H_list[H_ind, 1]*self.box_size[snapshot][1]}'
-                                                 f' {H_list[H_ind, 2]*self.box_size[snapshot][2]}')
+                                input_traj.write(f'{H_ind + 1} 1 {H_list[H_ind, 0] * self.box_size[snapshot][0]}'
+                                                 f' {H_list[H_ind, 1] * self.box_size[snapshot][1]}'
+                                                 f' {H_list[H_ind, 2] * self.box_size[snapshot][2]}')
                                 input_traj.write('\n')
                             for O_ind in range(O_list.shape[0]):
-                                input_traj.write(f'{O_ind + 1 + H_list.shape[0] } 2 '
-                                                 f'{O_list[O_ind, 0]*self.box_size[snapshot][0]} '
-                                                 f'{O_list[O_ind, 1]*self.box_size[snapshot][1]}'
-                                                 f' {O_list[O_ind, 2]*self.box_size[snapshot][2]}')
+                                input_traj.write(f'{O_ind + 1 + H_list.shape[0]} 2 '
+                                                 f'{O_list[O_ind, 0] * self.box_size[snapshot][0]} '
+                                                 f'{O_list[O_ind, 1] * self.box_size[snapshot][1]}'
+                                                 f' {O_list[O_ind, 2] * self.box_size[snapshot][2]}')
                                 input_traj.write('\n')
-
-                        print(f"trajectory saved as water_{copy}.data")
+                        if self.verbosity == "loud":
+                            print(f"trajectory saved as water_{copy}.data")
 
                     else:
                         distances.append(temp)
-                        print("distance too far, trying next O")
+                        if self.verbosity == "loud":
+                            print("distance too far, trying next O")
 
-    def cut_snapshot(self, snapshot: int=0, path: str=None) -> None:
+    def cut_snapshot(self, snapshot: int = 0, path: str = None) -> None:
         '''
         Method to remove a single time-frame from an entire trajectory for usage as an input for a new md run.
         :param snapshot: the frame at which point in time should be cut, default=0
@@ -749,7 +744,6 @@ class Trajectory:
             water_file = path + "traj_cut_out.data"
         else:
             water_file = "traj_cut_out.data"
-
 
         with open(water_file, "a") as input_traj:
             input_traj.write('translated LAMMPS data file via gromacsconf\n')
@@ -771,17 +765,17 @@ class Trajectory:
             input_traj.write('\n')
 
             for H_ind in range(H_list.shape[0]):
-                input_traj.write(f'{H_ind + 1} 1 {H_list[H_ind, 0]*self.box_size[snapshot][0]}'
-                                 f' {H_list[H_ind, 1]*self.box_size[snapshot][1]} '
-                                 f'{H_list[H_ind, 2]*self.box_size[snapshot][2]}')
+                input_traj.write(f'{H_ind + 1} 1 {H_list[H_ind, 0] * self.box_size[snapshot][0]}'
+                                 f' {H_list[H_ind, 1] * self.box_size[snapshot][1]} '
+                                 f'{H_list[H_ind, 2] * self.box_size[snapshot][2]}')
                 input_traj.write('\n')
             for O_ind in range(O_list.shape[0]):
-                input_traj.write(f'{O_ind + 1 + H_list.shape[0] } 2 {O_list[O_ind, 0]*self.box_size[snapshot][0]}'
-                                 f' {O_list[O_ind, 1]*self.box_size[snapshot][1]} '
-                                 f'{O_list[O_ind, 2]*self.box_size[snapshot][2]}')
+                input_traj.write(f'{O_ind + 1 + H_list.shape[0]} 2 {O_list[O_ind, 0] * self.box_size[snapshot][0]}'
+                                 f' {O_list[O_ind, 1] * self.box_size[snapshot][1]} '
+                                 f'{O_list[O_ind, 2] * self.box_size[snapshot][2]}')
                 input_traj.write('\n')
 
-    def remove_atoms(self, N: int=1, snap: int=0, atom_id: int=None, format_out: str="lammps") -> None:
+    def remove_atoms(self, N: int = 1, snap: int = 0, atom_id: int = None, format_out: str = "lammps") -> None:
         '''
         Method to remove molecules from a given trajectory. New trajectory will be safed as "reduced_water.format"
         in the current folder. For N=0 this can be used to simply change the format i.e lammps>XDATCAR
@@ -791,10 +785,10 @@ class Trajectory:
                         hydrogens. If not passed atoms will be taken at random
         '''
 
-
         O_list = self.s2[snap]
         H_list = self.s1[snap]
-        print(O_list.shape, H_list.shape)
+        if self.verbosity == "loud":
+            print(O_list.shape, H_list.shape)
         to_remove_H_ind = np.empty(0, dtype=int)
         to_remove_O_ind = np.empty(0, dtype=int)
         atom_id = np.random.choice(len(O_list), size=N, replace=False)
@@ -803,18 +797,15 @@ class Trajectory:
         NN_list = np.rint(NN_list).astype(int)
 
         for i in range(N):
-
-
             to_remove_H_ind = np.append(to_remove_H_ind, np.argwhere(NN_list == atom_id[i]))
             to_remove_O_ind = np.append(to_remove_O_ind, NN_list[to_remove_H_ind])
 
-
-
-            #remember axis=0 -> rows
+            # remember axis=0 -> rows
 
         O_list = np.delete(O_list, to_remove_O_ind, axis=0)
         H_list = np.delete(H_list, to_remove_H_ind, axis=0)
-        print(O_list.shape, H_list.shape)
+        if self.verbosity == "loud":
+            print(O_list.shape, H_list.shape)
 
         if format_out == "lammps":
 
@@ -823,8 +814,8 @@ class Trajectory:
                     group_traj.write('ITEM: TIMESTEP\n')
                     group_traj.write(f'{snapshot * ts}\n')
                     group_traj.write("ITEM: NUMBER OF ATOMS\n")
-                    group_traj.write(str(self.n_atoms-3*N)+"\n")
-                    #group_traj.write("ITEM: BOX BOUNDS xy xz yz pp pp pp\n")
+                    group_traj.write(str(self.n_atoms - 3 * N) + "\n")
+                    # group_traj.write("ITEM: BOX BOUNDS xy xz yz pp pp pp\n")
                     group_traj.write("ITEM: BOX BOUNDS pp pp pp\n")
                     for i in range(3):
                         temp = " ".join(map(str, self.box_dim[snapshot][i, :]))
@@ -859,6 +850,7 @@ class Trajectory:
                         group_traj.write(f'{temp}\n')
 
                 return
+
             write_XDATCAR(np.vstack((O_list, H_list)), snapshot=snap)
 
 
@@ -873,7 +865,7 @@ class Trajectory:
             warnings.warn("not supported format_out please check documentation for viable formats")
             return
 
-    def group_molecules(self, timestep: int=5000, path: str=None) -> None:
+    def group_molecules(self, timestep: int = 5000, path: str = None) -> None:
         '''
         method to group nearest neighbours back to molecules to track their trajectory in time
         :param timestep: step range at which distance simulation results are printed
@@ -882,7 +874,7 @@ class Trajectory:
         '''
 
         if path is not None:
-            new_traj = open(path+'grouped_water.lammpstrj', "w")
+            new_traj = open(path + 'grouped_water.lammpstrj', "w")
         else:
             new_traj = open('grouped_water.lammpstrj', "w")
 
@@ -899,7 +891,7 @@ class Trajectory:
                             s1=self.s1, s2=self.s2)
         return None
 
-    def get_radial_diffusion(self, timestep: int=0.0005) -> np.ndarray:
+    def get_radial_diffusion(self, timestep: int = 0.0005) -> np.ndarray:
         '''
         method to calculate the radial diffusion coefficient based on 10.1103/PhysRevE.76.031203
         currently only supports non ionic water without hydrogen exchange.
@@ -909,7 +901,7 @@ class Trajectory:
 
         # step 1 determine molecules: for each H find the corresponding O for frame 1
         # -> molecules should not change over time so save particle id.
-        # todo: add functionallity for non static molecules i.e water ions
+        # todo: add functionality for non static molecules i.e water ions
 
         indexlist_group, _ = self.get_neighbour_KDT(species_1=self.s1[0],
                                                     species_2=self.s2[0], mode="pbc", snapshot=0)
@@ -919,7 +911,7 @@ class Trajectory:
         molecule_list = [None] * self.s2[0].shape[0]
         # molecule_list is a list of tuples (H1_ind, H2_ind, O_ind) as molecule reference for later timesteps
 
-        for O_atom in  range(self.s2[0].shape[0]):
+        for O_atom in range(self.s2[0].shape[0]):
             H_1 = atom_id_H[np.argwhere(indexlist_group == O_atom)[0]][0]
             H_2 = atom_id_H[np.argwhere(indexlist_group == O_atom)[1]][0]
             O = atom_id_O[O_atom]
@@ -939,19 +931,19 @@ class Trajectory:
             for molecule in range(len(molecule_list)):
                 # get the row indices for the current molecule
                 # remember self.trajectory[dt]=(atom_id, atom_type, x, y, z) x n_atom
-                H_1 = self.trajectory[dt ,self.trajectory[dt, :, 0] == molecule_list[molecule][0] , 2:]
-                H_2 = self.trajectory[dt ,self.trajectory[dt, :, 0] == molecule_list[molecule][1] , 2:]
-                O = self.trajectory[dt ,self.trajectory[dt, :, 0] == molecule_list[molecule][2], 2:]
+                H_1 = self.trajectory[dt, self.trajectory[dt, :, 0] == molecule_list[molecule][0], 2:]
+                H_2 = self.trajectory[dt, self.trajectory[dt, :, 0] == molecule_list[molecule][1], 2:]
+                O = self.trajectory[dt, self.trajectory[dt, :, 0] == molecule_list[molecule][2], 2:]
 
                 com_list[dt, molecule, :] = get_com(H_1, H_2, O)
-                p_list [dt, molecule, :] = get_p_vector(H_1[0], H_2[0], com_list[dt, molecule, :])
+                p_list[dt, molecule, :] = get_p_vector(H_1[0], H_2[0], com_list[dt, molecule, :])
 
         # calc the Delta_phi vector and do the time integration from 0 to current timestep to arrive
         # at the phi(delta t) vector
 
         for dt in range(1, self.n_snapshots):
             for molecule in range(len(molecule_list)):
-                #note p(t) x p(t + 1) = p(t - 1) x p(t) -> shift
+                # note p(t) x p(t + 1) = p(t - 1) x p(t) -> shift
                 delta_phi_list[dt, molecule, :] = get_delta_phi_vector(p_list[dt - 1, molecule, :],
                                                                        p_list[dt, molecule, :])
                 # use https://github.com/pdebuyl-lab/tidynamics/blob/master/tidynamics/_correlation.py
@@ -970,13 +962,58 @@ class Trajectory:
         for dt in range(self.n_snapshots):
             temp = 0
             for molecule in range(len(molecule_list)):
-                temp = temp + np.linalg.norm(phi_list[dt, molecule, :] - phi_list[0, molecule, :])**2
+                temp = temp + np.linalg.norm(phi_list[dt, molecule, :] - phi_list[0, molecule, :]) ** 2
             rot_msd_list[dt] = temp
 
         rot_msd_list = rot_msd_list / len(molecule_list)
         return rot_msd_list
 
-    def get_recombination_time(self) -> int:
+    def get_MSD(self) -> np.ndarray:
+        '''
+        todo:: finish docstring
+        :return:
+        '''
+
+        # step 1 group the molecules at each time step
+        molecule_list = [None] * self.n_snapshots
+        msd_array = np.empty(self.n_snapshots)
+        com_list = [None] * self.n_snapshots
+
+        for timestep in range(self.n_snapshots):
+            molecules = []
+            indexlist_group, _ = self.get_neighbour_KDT(species_1=self.s1[timestep],
+                                                        species_2=self.s2[timestep], mode="pbc", snapshot=timestep)
+
+            for O_atom in range(self.s2[timestep].shape[0]):
+                temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+                molecules.append(temp)
+
+            molecule_list[timestep] = molecules
+
+            # step 2 calculate CoM for each molecule at each time step
+            com_list[timestep] = get_com_dynamic(molecules, self.s1[timestep], self.s2[timestep])
+
+        # step 3 calculate MSD
+        # todo:: two loops over same variable -> can be done more efficient
+        for dt in range(self.n_snapshots):
+            temp = 0
+            for molecule in range(len(molecule_list[dt])):
+                temp = temp + np.linalg.norm(com_list[dt][molecule, :] - com_list[0][molecule, :]) ** 2
+            msd_array[dt] = temp
+
+        return msd_array / len(molecule_list[0])
+
+    def get_translational_diffusion(self, timestep: int = 0.0005) -> np.ndarray:
+        diffusion = np.empty(self.n_snapshots)
+
+        for dt in range(self.n_snapshots):
+            diffusion[dt] = 0
+
+        diffusion /= 2 * 3 * timestep
+
+        return 0
+
+    def get_recombination_time(self) -> (int, bool):
         '''
         Method to determine the time in the trajectory where the ions recombine.
         - todo:: uses alot of the group_molecules method, be smart about resuing code
@@ -991,8 +1028,7 @@ class Trajectory:
                 molecules.append(temp)
             recombination_time = i
             if all([len(_list) for _list in molecules]) == 3:
-                return recombination_time
-
-        print("Trajectory did not recombine")
-        return self.n_snapshots
-
+                return recombination_time, True
+        if self.verbosity == "loud":
+            print("Trajectory did not recombine")
+        return self.n_snapshots, False
