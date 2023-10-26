@@ -287,3 +287,5 @@ def get_com_dynamic(molecules: list, H_pos: np.ndarray, O_pos: np.ndarray) -> np
         com[ind, :] = temp
 
     return com
+
+

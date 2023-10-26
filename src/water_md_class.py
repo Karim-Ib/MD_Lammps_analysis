@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import regex
 import string
+from rdfpy import rdf
 from scipy.spatial import cKDTree
 from scipy.integrate import trapezoid
 import warnings, os
@@ -52,7 +53,6 @@ class Trajectory:
         self.distance = 0
         self.ion_distance = 0
         self.recombination_time, self.did_recombine = self.get_recombination_time()
-
 
     def xdatcar_to_np(self) -> (np.ndarray, np.ndarray):
         '''
@@ -500,6 +500,35 @@ class Trajectory:
 
         return None
 
+    def get_rdf(self, snapshot: int=0, increment: float=0.005, gr_type: str="OO", par: bool=False):
+        '''
+        Method to calculate the radial distribution function. Wraps around the rdfpy package from
+        Batuhan Yildirim and Hamish Galloway Brown
+        :return:
+        '''
+
+        if gr_type == "OO":
+            upscale = self.s2[snapshot][:, 2:]
+            upscale[:, 0] *= self.box_size[snapshot][0]
+            upscale[:, 1] *= self.box_size[snapshot][1]
+            upscale[:, 2] *= self.box_size[snapshot][2]
+            g_r, r = rdf(upscale, dr=increment, parallel=par)
+            return g_r, r
+        if gr_type == "HH":
+            upscale = self.s1[snapshot][:, 2:]
+            upscale[:, 0] *= self.box_size[snapshot][0]
+            upscale[:, 1] *= self.box_size[snapshot][1]
+            upscale[:, 2] *= self.box_size[snapshot][2]
+            g_r, r = rdf(upscale, dr=increment, parallel=par)
+            return g_r, r
+        if gr_type == "OH":
+            upscale = self.trajectory[snapshot, :, 2:]
+            upscale[:, 0] *= self.box_size[snapshot][0]
+            upscale[:, 1] *= self.box_size[snapshot][1]
+            upscale[:, 2] *= self.box_size[snapshot][2]
+            g_r, r  = rdf(upscale, dr=increment, parallel=par)
+            return g_r, r
+
     def plot_water_hist(self, index_list: np.ndarray = None) -> None:
         '''
         Quick Wraperfunction for pyplot to draw a histogram of H-Bond distribution
@@ -853,10 +882,6 @@ class Trajectory:
 
             write_XDATCAR(np.vstack((O_list, H_list)), snapshot=snap)
 
-
-
-
-
         elif format_out == "gromac":
             warnings.warn("Foarmat gromac currently not supported")
             return
@@ -970,7 +995,7 @@ class Trajectory:
 
     def get_MSD(self) -> np.ndarray:
         '''
-        todo:: finish docstring
+        todo:: finish docstring and calculate MSD with "real" units not scaled.
         :return:
         '''
 
@@ -1032,3 +1057,42 @@ class Trajectory:
         if self.verbosity == "loud":
             print("Trajectory did not recombine")
         return self.n_snapshots, False
+
+
+    def get_ion_speed(self, dt: float=0.0005) -> (np.ndarray, np.ndarray):
+
+        speed_oh = np.zeros(self.recombination_time - 1)
+        speed_h3o = np.zeros(self.recombination_time - 1)
+        com_ions = []
+
+        for timestep in range(self.recombination_time):
+            indexlist_group, _ = self.get_neighbour_KDT(species_1=self.s1[timestep],
+                                                        species_2=self.s2[timestep], mode="pbc", snapshot=timestep)
+
+            for O_atom in range(self.s2[timestep].shape[0]):
+                temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+
+                if len(temp) == 2:
+                    oh_ion = temp
+                if len(temp) == 4:
+                    h3o_ion = temp
+
+            com_ions.append(get_com_dynamic([oh_ion, h3o_ion], self.s1[timestep], self.s2[timestep]))
+
+        for timestep in range(1, self.recombination_time):
+            temp = (com_ions[timestep][0] - com_ions[timestep - 1][0]) / dt
+            temp = np.sqrt(sum(temp**2))
+            speed_oh[timestep - 1] = temp
+            temp = (com_ions[timestep][1] - com_ions[timestep - 1][1]) / dt
+            temp = np.sqrt(sum(temp**2))
+            speed_h3o[timestep - 1] = temp
+
+
+        return speed_oh, speed_h3o
+
+
+
+
+
+
+

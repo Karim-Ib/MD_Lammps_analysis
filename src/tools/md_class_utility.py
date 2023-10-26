@@ -63,3 +63,39 @@ def generate_md_input(folder_input: str, folder_output: str, N_traj: int=1, form
         traj_temp.get_displace(snapshot=0, id=None, distance=random_displace_distance[i], eps=0.05,
                                path=folder_output+f"{i}_")
 
+def plot_MSD(msd: np.ndarray, timestep: float=0.0005) -> None:
+
+    fig, ax = plt.subplots()
+
+    ax.scatter(timestep*np.linspace(0,len(msd), len(msd)), msd, color="red", marker="x")
+    ax.plot(timestep*np.linspace(0,len(msd), len(msd)), msd)
+    ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+    ax.xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+    ax.set_xlabel("$\Delta$t in ps")
+    ax.grid()
+    ax.set_ylabel("<$r^2$>")
+    ax.set_title("Mean square displacement")
+
+    plt.show()
+
+    return None
+
+
+def plot_ion_speed(oh: np.ndarray, h3o: np.ndarray, dt: float=0.0005) -> None:
+
+    fig, ax = plt.subplots()
+
+    ax.plot(dt*np.linspace(0,len(oh), len(oh)), oh, color="blue", label="OH")
+    ax.plot(dt*np.linspace(0,len(h3o), len(h3o)), h3o, color="orange", label="H3O")
+    ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+    ax.xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+    plt.legend()
+    ax.set_xlabel("$\Delta$t in ps")
+    ax.grid()
+    ax.set_ylabel("<$|(v(t)|$>")
+    ax.set_title("Speed of H3O and OH ions at each time")
+
+    plt.show()
+
+    return None
+
