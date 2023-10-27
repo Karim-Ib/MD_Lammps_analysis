@@ -496,7 +496,43 @@ class Trajectory:
         return self.ion_distance
 
     def get_hydrogen_bonds(self):
-        # TODO: IMPLEMENTATION
+
+
+        for timestep in range(self.recombination_time):
+            indexlist_group, _ = self.get_neighbour_KDT(species_1=self.s1[timestep],
+                                                species_2=self.s2[timestep], mode="pbc", snapshot=timestep)
+
+            for O_atom in range(self.s2[timestep].shape[0]):
+                temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+
+                if len(temp) == 2:
+                    oh_ion = temp
+                if len(temp) == 4:
+                    h3o_ion = temp
+            bonding = True
+            while bonding:
+                tree = cKDTree(self.s1[timestep] * (self.box_size[timestep]).reshape(1, -1),
+                               leafsize=self.s1[timestep].shape[0],
+                               boxsize=self.box_size[timestep])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         return None
 
@@ -507,26 +543,28 @@ class Trajectory:
         :return:
         '''
 
+        Vol = self.box_size[snapshot][0] * self.box_size[snapshot][1] * self.box_size[snapshot][2]
+
         if gr_type == "OO":
             upscale = self.s2[snapshot][:, 2:]
             upscale[:, 0] *= self.box_size[snapshot][0]
             upscale[:, 1] *= self.box_size[snapshot][1]
             upscale[:, 2] *= self.box_size[snapshot][2]
-            g_r, r = rdf(upscale, dr=increment, parallel=par)
+            g_r, r = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
             return g_r, r
         if gr_type == "HH":
             upscale = self.s1[snapshot][:, 2:]
             upscale[:, 0] *= self.box_size[snapshot][0]
             upscale[:, 1] *= self.box_size[snapshot][1]
             upscale[:, 2] *= self.box_size[snapshot][2]
-            g_r, r = rdf(upscale, dr=increment, parallel=par)
+            g_r, r = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
             return g_r, r
         if gr_type == "OH":
             upscale = self.trajectory[snapshot, :, 2:]
             upscale[:, 0] *= self.box_size[snapshot][0]
             upscale[:, 1] *= self.box_size[snapshot][1]
             upscale[:, 2] *= self.box_size[snapshot][2]
-            g_r, r  = rdf(upscale, dr=increment, parallel=par)
+            g_r, r  = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
             return g_r, r
 
     def plot_water_hist(self, index_list: np.ndarray = None) -> None:
@@ -1029,6 +1067,7 @@ class Trajectory:
         return msd_array / len(molecule_list[0])
 
     def get_translational_diffusion(self, timestep: int = 0.0005) -> np.ndarray:
+        # todo:: finish implementation
         diffusion = np.empty(self.n_snapshots)
 
         for dt in range(self.n_snapshots):
@@ -1058,7 +1097,6 @@ class Trajectory:
             print("Trajectory did not recombine")
         return self.n_snapshots, False
 
-
     def get_ion_speed(self, dt: float=0.0005) -> (np.ndarray, np.ndarray):
 
         speed_oh = np.zeros(self.recombination_time - 1)
@@ -1087,12 +1125,5 @@ class Trajectory:
             temp = np.sqrt(sum(temp**2))
             speed_h3o[timestep - 1] = temp
 
-
         return speed_oh, speed_h3o
-
-
-
-
-
-
 
