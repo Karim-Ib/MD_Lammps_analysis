@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial import cKDTree
 
 
 
@@ -288,4 +289,15 @@ def get_com_dynamic(molecules: list, H_pos: np.ndarray, O_pos: np.ndarray) -> np
 
     return com
 
+def set_ckdtree(input_data: np.ndarray, n_leaf: int, box: np.ndarray) -> cKDTree:
+    tree = cKDTree(data=input_data, leafsize=n_leaf, boxsize=box)
+    return tree
+
+
+def scale_to_box(data: np.ndarray, box: []) -> np.ndarray:
+    upscale = data
+    upscale[:, 0] *= box[0]
+    upscale[:, 1] *= box[1]
+    upscale[:, 2] *= box[2]
+    return upscale
 

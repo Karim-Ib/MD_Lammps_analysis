@@ -7,6 +7,7 @@ from scipy.spatial import cKDTree
 from scipy.integrate import trapezoid
 import warnings, os
 from src.tools.md_class_functions import get_distance, write_lammpstrj, get_p_vector, get_com, get_delta_phi_vector
+from src.tools.md_class_functions import set_ckdtree, scale_to_box
 from src.tools.md_class_functions import get_com_dynamic
 
 
@@ -510,33 +511,19 @@ class Trajectory:
                 if len(temp) == 4:
                     h3o_ion = temp
             bonding = True
+            tree = cKDTree(self.s1[timestep] * (self.box_size[timestep]).reshape(1, -1),
+                           leafsize=self.s1[timestep].shape[0],
+                           boxsize=self.box_size[timestep])
             while bonding:
-                tree = cKDTree(self.s1[timestep] * (self.box_size[timestep]).reshape(1, -1),
-                               leafsize=self.s1[timestep].shape[0],
-                               boxsize=self.box_size[timestep])
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                bonding = False
 
 
 
 
         return None
 
-    def get_rdf(self, snapshot: int=0, increment: float=0.005, gr_type: str="OO", par: bool=False):
+    def get_rdf_rdfpy(self, snapshot: int=0, increment: float=0.005, gr_type: str="OO", par: bool=False):
         '''
         Method to calculate the radial distribution function. Wraps around the rdfpy package from
         Batuhan Yildirim and Hamish Galloway Brown
@@ -546,6 +533,8 @@ class Trajectory:
         Vol = self.box_size[snapshot][0] * self.box_size[snapshot][1] * self.box_size[snapshot][2]
 
         if gr_type == "OO":
+
+
             upscale = self.s2[snapshot][:, 2:]
             upscale[:, 0] *= self.box_size[snapshot][0]
             upscale[:, 1] *= self.box_size[snapshot][1]
@@ -566,6 +555,48 @@ class Trajectory:
             upscale[:, 2] *= self.box_size[snapshot][2]
             g_r, r  = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
             return g_r, r
+
+
+    def get_rdf(self, snapshot: int=0, increment: float=0.005, gr_type: str="OO", n_bins: int=50,
+                start: float=0.01, stop: float= 8.0) -> (np.ndarray, np.ndarray):
+        '''
+        Method to calculate the radial distribution function. Wraps around the rdfpy package from
+        Batuhan Yildirim and Hamish Galloway Brown
+        :return:
+        '''
+
+        Vol = self.box_size[snapshot][0] * self.box_size[snapshot][1] * self.box_size[snapshot][2]
+
+        if gr_type == "OO":
+            upscale = scale_to_box(self.s2[snapshot][:, 2:], self.box_size[snapshot])
+            number_density = len(upscale[:, 0])/Vol
+            tree = set_ckdtree(upscale, n_leaf=upscale.shape[0], box=self.box_size[snapshot])
+
+            bin_list = np.linspace(start, stop, n_bins)
+
+
+
+
+
+
+        if gr_type == "HH":
+            upscale = self.s1[snapshot][:, 2:]
+            upscale[:, 0] *= self.box_size[snapshot][0]
+            upscale[:, 1] *= self.box_size[snapshot][1]
+            upscale[:, 2] *= self.box_size[snapshot][2]
+            g_r, r = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
+            return g_r, r
+        if gr_type == "OH":
+            upscale = self.trajectory[snapshot, :, 2:]
+            upscale[:, 0] *= self.box_size[snapshot][0]
+            upscale[:, 1] *= self.box_size[snapshot][1]
+            upscale[:, 2] *= self.box_size[snapshot][2]
+            g_r, r  = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
+            return g_r, r
+
+
+
+
 
     def plot_water_hist(self, index_list: np.ndarray = None) -> None:
         '''
