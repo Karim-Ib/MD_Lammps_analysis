@@ -3,7 +3,7 @@ from scipy.spatial import cKDTree
 
 
 
-def get_distance(x: list, y: list, img: int=None, box: int=None, mode: str='normal') -> float:
+def get_distance(x: list, y: list, img: int=None, box: []=None, mode: str='normal') -> float:
     #TODO: check if img, box parameters are needed since we normalize anyways box should always be [1,1,1] for
     # each snapshot
     '''
@@ -18,7 +18,8 @@ def get_distance(x: list, y: list, img: int=None, box: int=None, mode: str='norm
     if mode == 'normal':
         return np.linalg.norm(x - y)
     if mode == 'pbc':
-        box = [1, 1, 1]
+        if box is None:
+            box = [1, 1, 1]
         dist = x - y
         if dist[0] >= (box[0] / 2):
             dist[0] -= box[0]
@@ -290,14 +291,122 @@ def get_com_dynamic(molecules: list, H_pos: np.ndarray, O_pos: np.ndarray) -> np
     return com
 
 def set_ckdtree(input_data: np.ndarray, n_leaf: int, box: np.ndarray) -> cKDTree:
+    '''
+    wraper to set up the periodic tree for rdf calculation
+    :param input_data: data to build the tree from
+    :param n_leaf: number of leafs, defaults to shape[0] of input
+    :param box: size of the periodic box
+    :return: periodic tree
+    '''
     tree = cKDTree(data=input_data, leafsize=n_leaf, boxsize=box)
     return tree
 
 
 def scale_to_box(data: np.ndarray, box: []) -> np.ndarray:
-    upscale = data
-    upscale[:, 0] *= box[0]
-    upscale[:, 1] *= box[1]
-    upscale[:, 2] *= box[2]
+    '''
+    wraper to calculate the upscaled coordinates
+    #todo:: check if data is scaled!
+    :param data: data to scale
+    :param box: appropriate box dimensions
+    :return: scaled data
+    '''
+    upscale = np.zeros(data.shape)
+
+    upscale[:, 0] = np.multiply(data[:, 0], box[0])
+    upscale[:, 1] = np.multiply(data[:, 1], box[1])
+    upscale[:, 2] = np.multiply(data[:, 2], box[2])
     return upscale
 
+
+def get_sphere_volume(r: float) -> float:
+    '''
+    wraper to calculate volume of a sphere
+    :param r: radius of the sphere
+    :return: volume
+    '''
+    return 4 * np.pi * r**3 / 4
+
+
+def init_rdf(data: np.ndarray, box: np.ndarray, n_bins: int, start: float,
+             stop: float=None) ->(np.ndarray, float, cKDTree, np.ndarray, np.ndarray):
+    '''
+    Initializes Objects to calculate the rdf
+    :param data: input data
+    :param box: x,y,z of the md box
+    :param n_bins: number of bins
+    :param start: start radius
+    :param stop: end radius
+    :return: returns the scaled data, number density, the periodic tree, the bin list and bin volumes
+    '''
+
+    if stop is None:
+        stop = min(box) / 2
+
+    Vol = box[0] * box[1] * box[2]
+
+    upscale = scale_to_box(data[:, 2:], box)
+    number_density = len(upscale[:, 0])/Vol
+    tree = set_ckdtree(upscale, n_leaf=upscale.shape[0], box=box)
+
+    bin_list = np.linspace(start, stop, n_bins)
+    bin_vol = np.zeros(len(bin_list))
+    bin_vol[0] = get_sphere_volume(bin_list[0])
+
+    for _bin in range(1, len(bin_vol)):
+        bin_vol[_bin] = get_sphere_volume(bin_list[_bin]) - bin_vol[_bin - 1]
+
+    return upscale, number_density, tree, bin_list, bin_vol
+
+
+def calculate_rdf(data: np.ndarray, rho: float, tree: cKDTree, bins: np.ndarray,
+                  bin_v: np.ndarray, n_cores: int=4) -> (np.ndarray, np.ndarray):
+
+    '''
+    Function to calculate the rdf
+    :param data: data to query from the tree
+    :param rho: number density
+    :param tree: periodic tree of neighbours
+    :param bins: list of bins
+    :param bin_v: volumes of the bin shells
+    :param n_cores: number of cores for parallel usage, default 4
+    :return: returns the g_r and bin list
+    '''
+
+    count = np.zeros(len(bins))
+
+    for o_atom in range(data.shape[0]):
+        for ind, _bin in enumerate(bins):
+            temp = tree.query_ball_point(data[o_atom, :], _bin, workers=n_cores,
+                                         return_length=True)
+            count[ind] += temp
+
+    #average over all atoms
+    count /= data.shape[0]
+
+    #subtract count from smaler sphere from larger sphere -> number of atoms in a shell
+    for i in range(len(count) - 1):
+        count[i + 1] -= count[i]
+
+    #normalize by the bin volume
+    count = np.divide(count, bin_v)
+
+    return count/rho, bins
+
+def get_all_distances(data: np.ndarray, box: []=None) -> np.ndarray:
+
+    distances = np.zeros((data.shape[0], data.shape[0]))
+
+    for atom in range(data.shape[0]):
+        for neighbour in range(data.shape[0]):
+            distances[atom, neighbour] = get_distance(data[atom, :], data[neighbour, :],
+                                                      mode="pbc", box=box)
+    return distances
+
+def count_rdf_hist(distances: np.ndarray, bins: np.ndarray):
+
+    counter = np.zeros(bins.shape[0] - 1)
+
+    for atom in range(distances.shape[0]):
+        temp, _ = np.histogram(distances[atom, :], bins=bins)
+        counter += temp
+    return counter / distances.shape[0]

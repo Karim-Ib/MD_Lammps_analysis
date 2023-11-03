@@ -6,8 +6,7 @@ from rdfpy import rdf
 from scipy.spatial import cKDTree
 from scipy.integrate import trapezoid
 import warnings, os
-from src.tools.md_class_functions import get_distance, write_lammpstrj, get_p_vector, get_com, get_delta_phi_vector
-from src.tools.md_class_functions import set_ckdtree, scale_to_box
+from src.tools.md_class_functions import *
 from src.tools.md_class_functions import get_com_dynamic
 
 
@@ -505,18 +504,18 @@ class Trajectory:
 
             for O_atom in range(self.s2[timestep].shape[0]):
                 temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
-
+                water = []
                 if len(temp) == 2:
                     oh_ion = temp
                 if len(temp) == 4:
                     h3o_ion = temp
-            bonding = True
-            tree = cKDTree(self.s1[timestep] * (self.box_size[timestep]).reshape(1, -1),
-                           leafsize=self.s1[timestep].shape[0],
-                           boxsize=self.box_size[timestep])
-            while bonding:
+                if len(temp) == 3:
+                    water.append(temp)
 
-                bonding = False
+
+
+
+
 
 
 
@@ -557,44 +556,82 @@ class Trajectory:
             return g_r, r
 
 
-    def get_rdf(self, snapshot: int=0, increment: float=0.005, gr_type: str="OO", n_bins: int=50,
-                start: float=0.01, stop: float= 8.0) -> (np.ndarray, np.ndarray):
+    def get_rdf(self, snapshot: int=0, gr_type: str="OO", n_bins: int=50,
+                start: float=0.01, stop: float= None, n_parallel: int=4, single=False) -> (np.ndarray, np.ndarray):
         '''
         Method to calculate the radial distribution function. Wraps around the rdfpy package from
         Batuhan Yildirim and Hamish Galloway Brown
         :return:
         '''
 
-        Vol = self.box_size[snapshot][0] * self.box_size[snapshot][1] * self.box_size[snapshot][2]
+        if single:
+            if gr_type == "OO":
+                upscale, number_density, tree, bin_list, bin_vol = init_rdf(self.s2[snapshot], self.box_size[snapshot],
+                                                                            n_bins, start, stop)
+                gr, _ = calculate_rdf(upscale, number_density, tree, bin_list, bin_vol, n_cores=n_parallel)
 
-        if gr_type == "OO":
-            upscale = scale_to_box(self.s2[snapshot][:, 2:], self.box_size[snapshot])
-            number_density = len(upscale[:, 0])/Vol
-            tree = set_ckdtree(upscale, n_leaf=upscale.shape[0], box=self.box_size[snapshot])
+                return gr, bin_list
 
-            bin_list = np.linspace(start, stop, n_bins)
+            if gr_type == "HH":
 
+                return None
+            if gr_type == "OH":
 
+                return None
 
+        if not single:
+            if gr_type == "OO":
 
+                gr_data = np.zeros((self.n_snapshots, n_bins))
 
+                for snap in range(self.n_snapshots):
+                    upscale, number_density, tree, bin_list, bin_vol = init_rdf(self.s2[snap], self.box_size[snap],
+                                                                                n_bins, start, stop)
+                    temp, _ = calculate_rdf(upscale, number_density, tree, bin_list, bin_vol, n_cores=n_parallel)
 
-        if gr_type == "HH":
-            upscale = self.s1[snapshot][:, 2:]
-            upscale[:, 0] *= self.box_size[snapshot][0]
-            upscale[:, 1] *= self.box_size[snapshot][1]
-            upscale[:, 2] *= self.box_size[snapshot][2]
-            g_r, r = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
-            return g_r, r
-        if gr_type == "OH":
-            upscale = self.trajectory[snapshot, :, 2:]
-            upscale[:, 0] *= self.box_size[snapshot][0]
-            upscale[:, 1] *= self.box_size[snapshot][1]
-            upscale[:, 2] *= self.box_size[snapshot][2]
-            g_r, r  = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
-            return g_r, r
+                    gr_data[snap, :] = temp
+
+            gr = np.sum(gr_data, axis=0)
+
+            return gr/self.n_snapshots, bin_list
 
 
+            if gr_type == "HH":
+
+                return None
+            if gr_type == "OH":
+
+                return None
+
+
+
+    def get_rdf_rdist(self, snapshot: int=0, gr_type: str="OO", n_bins: int=50, start: float=0.01, stop: float=None,
+                      single=False)-> (np.ndarray, np.ndarray):
+        if single:
+            if gr_type=="OO":
+                upscale, number_density, _, bin_list, bin_vol = init_rdf(self.s2[snapshot], self.box_size[snapshot],
+                                                                            n_bins, start, stop)
+
+                distance = get_all_distances(upscale, self.box_size[snapshot])
+                counter = count_rdf_hist(distance, bins=bin_list)
+                counter = np.divide(counter, bin_vol[:-1])
+
+            return counter / number_density, bin_list
+
+        if not single:
+            if gr_type=="OO":
+                rdf_list = np.zeros((self.n_snapshots, n_bins -1))
+                for snap in range(self.n_snapshots ):
+                    upscale, number_density, _, bin_list, bin_vol = init_rdf(self.s2[snap], self.box_size[snap],
+                                                                             n_bins, start, stop)
+
+                    distance = get_all_distances(upscale, self.box_size[snap])
+                    counter = count_rdf_hist(distance, bins=bin_list)
+                    counter = np.divide(counter, bin_vol[1:])
+                    rdf_list[snap, :] = counter
+
+
+                return np.sum(rdf_list, axis=0) / number_density, bin_list
 
 
 
