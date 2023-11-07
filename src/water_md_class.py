@@ -558,11 +558,6 @@ class Trajectory:
 
     def get_rdf(self, snapshot: int=0, gr_type: str="OO", n_bins: int=50,
                 start: float=0.01, stop: float= None, n_parallel: int=4, single=False) -> (np.ndarray, np.ndarray):
-        '''
-        Method to calculate the radial distribution function. Wraps around the rdfpy package from
-        Batuhan Yildirim and Hamish Galloway Brown
-        :return:
-        '''
 
         if single:
             if gr_type == "OO":
@@ -572,13 +567,20 @@ class Trajectory:
 
                 return gr, bin_list
 
+
             if gr_type == "HH":
+                upscale, number_density, tree, bin_list, bin_vol = init_rdf(self.s1[snapshot], self.box_size[snapshot],
+                                                                            n_bins, start, stop)
+                gr, _ = calculate_rdf(upscale, number_density, tree, bin_list, bin_vol, n_cores=n_parallel)
 
-                return None
+                return gr, bin_list
+
             if gr_type == "OH":
+                upscale, number_density, tree, bin_list, bin_vol = init_rdf(self.s1[snapshot], self.box_size[snapshot],
+                                                                            n_bins, start, stop)
+                gr, _ = calculate_rdf(upscale, number_density, tree, bin_list, bin_vol, n_cores=n_parallel)
 
-                return None
-
+                return gr, bin_list
         if not single:
             if gr_type == "OO":
 
@@ -591,9 +593,9 @@ class Trajectory:
 
                     gr_data[snap, :] = temp
 
-            gr = np.sum(gr_data, axis=0)
+            gr = np.sum(gr_data, axis=0) / self.n_snapshots
 
-            return gr/self.n_snapshots, bin_list
+            return gr, bin_list
 
 
             if gr_type == "HH":
@@ -604,36 +606,51 @@ class Trajectory:
                 return None
 
 
-
     def get_rdf_rdist(self, snapshot: int=0, gr_type: str="OO", n_bins: int=50, start: float=0.01, stop: float=None,
-                      single=False)-> (np.ndarray, np.ndarray):
-        if single:
+                      single_frame=False)-> (np.ndarray, np.ndarray):
+        if single_frame:
             if gr_type=="OO":
-                upscale, number_density, _, bin_list, bin_vol = init_rdf(self.s2[snapshot], self.box_size[snapshot],
-                                                                            n_bins, start, stop)
+                gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
+                                       stop=stop)
+                return gr, r
+            if gr_type=="HH":
+                gr, r = calc_rdf_rdist(data=self.s1, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
+                                       stop=stop)
+                return gr, r
+            if gr_type=="OH":
+                gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
+                                       stop=stop, data_2=self.s1[snapshot])
+                return gr, r
 
-                distance = get_all_distances(upscale, self.box_size[snapshot])
-                counter = count_rdf_hist(distance, bins=bin_list)
-                counter = np.divide(counter, bin_vol[:-1])
-
-            return counter / number_density, bin_list
-
-        if not single:
+        if not single_frame:
             if gr_type=="OO":
                 rdf_list = np.zeros((self.n_snapshots, n_bins -1))
                 for snap in range(self.n_snapshots ):
-                    upscale, number_density, _, bin_list, bin_vol = init_rdf(self.s2[snap], self.box_size[snap],
-                                                                             n_bins, start, stop)
 
-                    distance = get_all_distances(upscale, self.box_size[snap])
-                    counter = count_rdf_hist(distance, bins=bin_list)
-                    counter = np.divide(counter, bin_vol[1:])
-                    rdf_list[snap, :] = counter
+                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snap, n_bins=n_bins, start=start,
+                                           stop=stop)
+                    rdf_list[snap, :] = gr
 
+                rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
+                return rdf_list, r
+            if gr_type=="HH":
+                rdf_list = np.zeros((self.n_snapshots, n_bins -1))
+                for snap in range(self.n_snapshots ):
+                    gr, r = calc_rdf_rdist(data=self.s1, box=self.box_size, snapshot=snap, n_bins=n_bins, start=start,
+                                           stop=stop)
+                    rdf_list[snap, :] = gr
 
-                return np.sum(rdf_list, axis=0) / number_density, bin_list
+                rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
+                return rdf_list, r
+            if gr_type=="OH":
+                rdf_list = np.zeros((self.n_snapshots, n_bins -1))
+                for snap in range(self.n_snapshots ):
+                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
+                                           stop=stop, data_2=self.s1[snap])
+                    rdf_list[snap, :] = gr
 
-
+                rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
+                return rdf_list, r
 
     def plot_water_hist(self, index_list: np.ndarray = None) -> None:
         '''

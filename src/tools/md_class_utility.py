@@ -99,3 +99,20 @@ def plot_ion_speed(oh: np.ndarray, h3o: np.ndarray, dt: float=0.0005) -> None:
 
     return None
 
+def plot_rdf(gr: np.ndarray, r: np.ndarray, type: str="OO") -> None:
+
+    fig, ax = plt.subplots()
+
+    ax.plot(r, gr, color="blue", label="g(r)")
+    #ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+    #ax.xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+    plt.legend()
+    ax.set_xlabel(r'r in Å')
+    ax.grid()
+    ax.set_ylabel(f"{type}-g(r)")
+    ax.set_title(f"{type} Radial distribution function")
+
+    plt.show()
+
+    return None
+

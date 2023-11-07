@@ -324,11 +324,12 @@ def get_sphere_volume(r: float) -> float:
     :param r: radius of the sphere
     :return: volume
     '''
-    return 4 * np.pi * r**3 / 4
+    return 4 * np.pi * r**3 / 3
 
 
 def init_rdf(data: np.ndarray, box: np.ndarray, n_bins: int, start: float,
-             stop: float=None) ->(np.ndarray, float, cKDTree, np.ndarray, np.ndarray):
+             stop: float=None, data_2: np.ndarray=None):
+
     '''
     Initializes Objects to calculate the rdf
     :param data: input data
@@ -336,6 +337,7 @@ def init_rdf(data: np.ndarray, box: np.ndarray, n_bins: int, start: float,
     :param n_bins: number of bins
     :param start: start radius
     :param stop: end radius
+    :param data_2: optional, positions of 2nd particle type
     :return: returns the scaled data, number density, the periodic tree, the bin list and bin volumes
     '''
 
@@ -350,12 +352,16 @@ def init_rdf(data: np.ndarray, box: np.ndarray, n_bins: int, start: float,
 
     bin_list = np.linspace(start, stop, n_bins)
     bin_vol = np.zeros(len(bin_list))
-    bin_vol[0] = get_sphere_volume(bin_list[0])
 
-    for _bin in range(1, len(bin_vol)):
-        bin_vol[_bin] = get_sphere_volume(bin_list[_bin]) - bin_vol[_bin - 1]
 
-    return upscale, number_density, tree, bin_list, bin_vol
+    for _bin in range(len(bin_vol)):
+        bin_vol[_bin] = get_sphere_volume(bin_list[_bin]) - get_sphere_volume(bin_list[_bin - 1])
+
+    if data_2 is None:
+        return upscale, number_density, tree, bin_list, bin_vol, None
+    else:
+        upscale_2 = scale_to_box(data_2[:, 2:], box)
+        return upscale, upscale_2, upscale_2.shape[0]/Vol, tree, bin_list, bin_vol
 
 
 def calculate_rdf(data: np.ndarray, rho: float, tree: cKDTree, bins: np.ndarray,
@@ -392,21 +398,43 @@ def calculate_rdf(data: np.ndarray, rho: float, tree: cKDTree, bins: np.ndarray,
 
     return count/rho, bins
 
-def get_all_distances(data: np.ndarray, box: []=None) -> np.ndarray:
+def get_all_distances(data: np.ndarray, box: []=None, data_2: np.ndarray=None) -> np.ndarray:
+    if data_2 is None:
+        distances = np.zeros((data.shape[0], data.shape[0]))
 
-    distances = np.zeros((data.shape[0], data.shape[0]))
+        for atom in range(data.shape[0]):
+            for neighbour in range(data.shape[0]):
+                distances[atom, neighbour] = get_distance(data[atom, :], data[neighbour, :],
+                                                          mode="pbc", box=box)
+        return distances
+    else:
+        distances = np.zeros((data.shape[0], data_2.shape[0]))
+        for o_atom in range(data.shape[0]):
+            for h_atom in range(data_2.shape[0]):
+                distances[o_atom, h_atom] = get_distance(data[o_atom, :], data_2[h_atom, :],
+                                                         mode="pbc", box=box)
+        return distances
 
-    for atom in range(data.shape[0]):
-        for neighbour in range(data.shape[0]):
-            distances[atom, neighbour] = get_distance(data[atom, :], data[neighbour, :],
-                                                      mode="pbc", box=box)
-    return distances
 
 def count_rdf_hist(distances: np.ndarray, bins: np.ndarray):
 
     counter = np.zeros(bins.shape[0] - 1)
 
     for atom in range(distances.shape[0]):
-        temp, _ = np.histogram(distances[atom, :], bins=bins)
+        temp, _ = np.histogram(distances[atom, :], bins=bins, density=False)
         counter += temp
+
     return counter / distances.shape[0]
+
+
+def calc_rdf_rdist(data: [np.ndarray], box: [np.ndarray], data_2: [np.ndarray]=None, snapshot: int=0,
+                  n_bins: int=50, start: float=0.01, stop: float=None)-> (np.ndarray, np.ndarray):
+
+    upscale, number_density, _, bin_list, bin_vol, upscale_2 = init_rdf(data[snapshot], box[snapshot],
+                                                             n_bins, start, stop, data_2)
+
+    distance = get_all_distances(upscale, box[snapshot], upscale_2)
+    counter = count_rdf_hist(distance, bins=bin_list)
+    counter = np.divide(counter, bin_vol[1:])
+
+    return counter / number_density, bin_list[1:]
