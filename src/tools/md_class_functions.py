@@ -2,7 +2,6 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 
-
 def get_distance(x: list, y: list, img: int=None, box: []=None, mode: str='normal') -> float:
     #TODO: check if img, box parameters are needed since we normalize anyways box should always be [1,1,1] for
     # each snapshot
@@ -290,6 +289,7 @@ def get_com_dynamic(molecules: list, H_pos: np.ndarray, O_pos: np.ndarray) -> np
 
     return com
 
+
 def set_ckdtree(input_data: np.ndarray, n_leaf: int, box: np.ndarray) -> cKDTree:
     '''
     wraper to set up the periodic tree for rdf calculation
@@ -331,7 +331,7 @@ def init_rdf(data: np.ndarray, box: np.ndarray, n_bins: int, start: float,
              stop: float=None, data_2: np.ndarray=None):
 
     '''
-    Initializes Objects to calculate the rdf
+    Initializes Objects to calculate the rdf from
     :param data: input data
     :param box: x,y,z of the md box
     :param n_bins: number of bins
@@ -398,7 +398,16 @@ def calculate_rdf(data: np.ndarray, rho: float, tree: cKDTree, bins: np.ndarray,
 
     return count/rho, bins
 
+
 def get_all_distances(data: np.ndarray, box: []=None, data_2: np.ndarray=None) -> np.ndarray:
+    '''
+    function to calculate distances, using pbc, for all pairs.
+    :param data: reference coordinates to calculate distances from
+    :param box: box size used for pbc
+    :param data_2: optional 2nd set of data for pair correlations
+    :return: array with all distance combinations
+    '''
+
     if data_2 is None:
         distances = np.zeros((data.shape[0], data.shape[0]))
 
@@ -416,8 +425,13 @@ def get_all_distances(data: np.ndarray, box: []=None, data_2: np.ndarray=None) -
         return distances
 
 
-def count_rdf_hist(distances: np.ndarray, bins: np.ndarray):
-
+def count_rdf_hist(distances: np.ndarray, bins: np.ndarray) -> np.ndarray:
+    '''
+    Function to count the number of distances at each bin
+    :param distances:array of all distance combinations
+    :param bins: array of bin boundaries
+    :return: array of the binned distances
+    '''
     counter = np.zeros(bins.shape[0] - 1)
 
     for atom in range(distances.shape[0]):
@@ -429,7 +443,17 @@ def count_rdf_hist(distances: np.ndarray, bins: np.ndarray):
 
 def calc_rdf_rdist(data: [np.ndarray], box: [np.ndarray], data_2: [np.ndarray]=None, snapshot: int=0,
                   n_bins: int=50, start: float=0.01, stop: float=None)-> (np.ndarray, np.ndarray):
-
+    '''
+    Wraper to combine the rdf calculation process for the radius distance binning method.
+    :param data: reference data to calculate rdf from
+    :param box: box size
+    :param data_2: optional 2nd set of data for pair correlation
+    :param snapshot: index of the snapshot
+    :param n_bins: number of bins
+    :param start: start radius, default 0.01
+    :param stop: end radius, defaults to min(box size)/2
+    :return: returns (gr, r)
+    '''
     upscale, number_density, _, bin_list, bin_vol, upscale_2 = init_rdf(data[snapshot], box[snapshot],
                                                              n_bins, start, stop, data_2)
 
@@ -438,3 +462,74 @@ def calc_rdf_rdist(data: [np.ndarray], box: [np.ndarray], data_2: [np.ndarray]=N
     counter = np.divide(counter, bin_vol[1:])
 
     return counter / number_density, bin_list[1:]
+
+
+def hbond_ion_check(mol: [float]) -> (bool, bool):
+    '''
+    wraper to check if the hbonding molecules are ions or not
+    :param mol: list of molecule atoms
+    :return: touple of booleans (is_h3, is_oh)
+    '''
+
+    if len(mol) == 3:
+        is_h3o = False
+        is_oh = False
+        return is_h3o, is_oh
+    if len(mol) == 4:
+        is_h3o = True
+        is_oh = False
+        return is_h3o, is_oh
+    else:
+        return False, True
+
+
+def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neighbour_mol: [int], box: [], max_distance: float=3.0,
+                min_angle: float=150.0) -> bool:
+    '''
+    Function to check the geometric hbond criterion as its used in mdanalysis:
+     https://userguide.mdanalysis.org/stable/examples/analysis/hydrogen_bonds/hbonds.html
+    :param traj_O: coordinates of the O atoms
+    :param traj_H: coordinates of the H atoms
+    :param current_mol: the current molecule from where we want to check the hbonding to neighbours
+    :param neighbour_mol: neighbouring molecules
+    :param box: box size
+    :param max_distance: maximal distance between two molecules O-Atom, defaults to 3A (empirical value)
+    :param min_angle: minimum angle between the Donor O, bonding Hydrogen and Acceptor O, defaults to 150°(empirical)
+    :return: returns a boolean whether the criterion is met or not.
+    '''
+
+
+
+    # check if either current or neighbour is an ion -> incase its needed
+    is_current_h3, is_current_oh = hbond_ion_check(current_mol)
+    is_neighbour_h3, is_neighbour_oh = hbond_ion_check(neighbour_mol)
+
+
+    # check the distance between both O's
+
+    OO_distance = get_distance(traj_O[current_mol[-1], :], traj_O[neighbour_mol[-1], :], box, mode="pbc")
+
+    if OO_distance > max_distance:
+        return False
+
+
+    # check which of the donor hydrogens is the closest
+
+    r_list = []
+    for ind, H in enumerate(current_mol[:-1]):
+        r_list.append(get_distance(traj_H[H, :], traj_O[neighbour_mol[-1], :], box, mode="pbc"))
+
+    bonding_H = r_list.index(min(r_list))
+
+    r_hd = traj_O[current_mol[-1], :] - traj_H[bonding_H, :]
+    r_ha = traj_O[neighbour_mol[-1], :] - traj_H[bonding_H, :]
+
+    # calculate the angle between Hydrogen-Donor and Hydrogen-Acceptor vectors
+    argument = np.dot(r_hd, r_ha) / (np.linalg.norm(r_hd) * np.linalg.norm(r_ha))
+    argument = np.round(argument, 5)
+    theta = np.degrees(np.arccos(argument))
+
+    if theta >= min_angle:
+        return True
+    else:
+        return False

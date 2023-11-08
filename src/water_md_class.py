@@ -495,32 +495,61 @@ class Trajectory:
 
         return self.ion_distance
 
-    def get_hydrogen_bonds(self):
+    def get_hydrogen_bonds(self, timestep: int=0, starting_oh: bool=True) -> []:
+        '''
+        Method to calculate the hydrogen bonded molecules in water.
+        :param timestep: Timestep at which point in the trajectory the bonding gets calculated
+        :param starting_oh: bool default True whether the tree is build starting from OH or H3O Ion
+        :return: list of touples of bonded molecules(ids)
+        '''
+
+        molecules = []
+        indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=timestep)
+        h3o_ind = None
+        oh_ind = None
+
+        for O_atom in range(self.s2[timestep].shape[0]):
+            temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+            molecules.append(temp)
+            if len(temp)==4:
+                h3o_ind = O_atom
+            if len(temp)==2:
+                oh_ind = O_atom
 
 
-        for timestep in range(self.recombination_time):
-            indexlist_group, _ = self.get_neighbour_KDT(species_1=self.s1[timestep],
-                                                species_2=self.s2[timestep], mode="pbc", snapshot=timestep)
+        if starting_oh:
+            root = oh_ind
+        else:
+            root = h3o_ind
 
-            for O_atom in range(self.s2[timestep].shape[0]):
-                temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
-                water = []
-                if len(temp) == 2:
-                    oh_ion = temp
-                if len(temp) == 4:
-                    h3o_ion = temp
-                if len(temp) == 3:
-                    water.append(temp)
+        marked = [False] * len(molecules)
+        bonding_list = []
+        stack = [root]
 
+        scale_O = scale_to_box(self.s2[timestep][:, 2:], self.box_size[timestep])
+        scale_H = scale_to_box(self.s1[timestep][:, 2:], self.box_size[timestep])
+        neighbour_tree = set_ckdtree(scale_O,
+                                     n_leaf=self.s2[timestep].shape[0],
+                                     box=self.box_size[timestep])
+        while len(stack) > 0:
+            vertex = stack.pop()
+            if not marked[vertex]:
+                neighbours = neighbour_tree.query_ball_point(scale_O[vertex], r=3.0)
+                for neigbour in neighbours:
 
+                    is_bonded=check_hbond(scale_O,
+                                    scale_H,
+                                    molecules[vertex],
+                                    molecules[neigbour],
+                                    box=self.box_size[timestep])
+                    if is_bonded:
+                        bonding_list.append((vertex, neigbour))
+                marked[vertex] = True
 
-
-
-
-
-
-
-        return None
+                for water in neighbours:
+                    if not marked[water]:
+                        stack.append(water)
+        return bonding_list
 
     def get_rdf_rdfpy(self, snapshot: int=0, increment: float=0.005, gr_type: str="OO", par: bool=False):
         '''
@@ -608,6 +637,17 @@ class Trajectory:
 
     def get_rdf_rdist(self, snapshot: int=0, gr_type: str="OO", n_bins: int=50, start: float=0.01, stop: float=None,
                       single_frame=False)-> (np.ndarray, np.ndarray):
+        '''
+        Method to calculate the radial distribution function for a single trajectory. either one frame or average over the
+        entire trajectory. Based on the binning of distances.
+        :param snapshot: Time index incase of single frame
+        :param gr_type: type of the rdf can be "OO", "HH" or "OH"
+        :param n_bins: number of bins
+        :param start: starting distance default =0.01
+        :param stop: end distance defaults to the min(box size)/2
+        :param single_frame: boolean default False
+        :return: g_r and r
+        '''
         if single_frame:
             if gr_type=="OO":
                 gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
@@ -1183,7 +1223,11 @@ class Trajectory:
         return self.n_snapshots, False
 
     def get_ion_speed(self, dt: float=0.0005) -> (np.ndarray, np.ndarray):
-
+        '''
+        Method to calculate the speed of the ions at each frame
+        :param dt: time between each snapshot
+        :return: arrays of speeds for each ion
+        '''
         speed_oh = np.zeros(self.recombination_time - 1)
         speed_h3o = np.zeros(self.recombination_time - 1)
         com_ions = []
