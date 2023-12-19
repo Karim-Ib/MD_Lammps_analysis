@@ -262,7 +262,7 @@ def get_com_dynamic(molecules: list, H_pos: np.ndarray, O_pos: np.ndarray) -> np
     :param O_pos: array of oxygen atom coordinates
     :return: array of the com of all molecules
     '''
-    com = np.empty((len(molecules), 3))
+    com = np.zeros((len(molecules), 3))
     m_H = 1.00784 # values in u
     m_O = 15.999
 
