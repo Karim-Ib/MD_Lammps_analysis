@@ -484,7 +484,7 @@ def hbond_ion_check(mol: [float]) -> (bool, bool):
 
 
 def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neighbour_mol: [int], box: [], max_distance: float=3.0,
-                min_angle: float=150.0) -> bool:
+                min_angle: float=150) -> bool:
     '''
     Function to check the geometric hbond criterion as its used in mdanalysis:
      https://userguide.mdanalysis.org/stable/examples/analysis/hydrogen_bonds/hbonds.html
@@ -498,7 +498,14 @@ def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neig
     :return: returns a boolean whether the criterion is met or not.
     '''
 
+    def check_pbc(x, box):
 
+        for index, coordinate in enumerate(x):
+            if coordinate > box[index]:
+                x[index] = coordinate - box[index]
+            if coordinate < 0:
+                x[index] = coordinate + box[index]
+        return x
 
     # check if either current or neighbour is an ion -> incase its needed
     is_current_h3, is_current_oh = hbond_ion_check(current_mol)
@@ -507,9 +514,10 @@ def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neig
 
     # check the distance between both O's
 
-    OO_distance = get_distance(traj_O[current_mol[-1], :], traj_O[neighbour_mol[-1], :], box, mode="pbc")
+    OO_distance = get_distance(x=traj_O[current_mol[-1], :], y=traj_O[neighbour_mol[-1], :], box=box, mode="pbc")
 
     if OO_distance > max_distance:
+        print(f'failed disstance check: {OO_distance}')
         return False
 
 
@@ -517,19 +525,36 @@ def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neig
 
     r_list = []
     for ind, H in enumerate(current_mol[:-1]):
-        r_list.append(get_distance(traj_H[H, :], traj_O[neighbour_mol[-1], :], box, mode="pbc"))
+        r_list.append(get_distance(traj_H[H, :], traj_O[neighbour_mol[-1], :], box=box, mode="pbc"))
 
     bonding_H = r_list.index(min(r_list))
 
-    r_hd = traj_O[current_mol[-1], :] - traj_H[bonding_H, :]
-    r_ha = traj_O[neighbour_mol[-1], :] - traj_H[bonding_H, :]
+
+    #need to do some shifting to make sure i dont run into pbc issues.
+
+    v_shift = np.array([x/2 for x in box]) - traj_H[bonding_H, :]
+
+    # D=donor, A=acceptor
+
+    H = traj_H[bonding_H, :] + v_shift
+    OD = traj_O[current_mol[-1], :] + v_shift
+    OA = traj_O[neighbour_mol[-1], :] + v_shift
+
+    H = check_pbc(H, box)
+    OD = check_pbc(OD, box)
+    OA = check_pbc(OA, box)
+
+    r_hd = OD - H
+    r_ha = OA - H
 
     # calculate the angle between Hydrogen-Donor and Hydrogen-Acceptor vectors
     argument = np.dot(r_hd, r_ha) / (np.linalg.norm(r_hd) * np.linalg.norm(r_ha))
     argument = np.round(argument, 5)
     theta = np.degrees(np.arccos(argument))
-
+    #theta = 360 * (np.arctan2(np.linalg.norm(np.cross(r_hd, r_ha)), np.dot(r_hd, r_ha))) / (2 * np.pi)
     if theta >= min_angle:
+        print(f'passed angle check: {theta}')
         return True
     else:
+        print(f'failed angle check: {theta}')
         return False

@@ -116,3 +116,19 @@ def plot_rdf(gr: np.ndarray, r: np.ndarray, type: str="OO") -> None:
 
     return None
 
+
+def plot_hbonds(bonds: [tuple], trj: [list]) -> None:
+
+    ordered_pairs = []
+
+    for bond in bonds:
+        temp = sorted(bond)
+        if temp not in ordered_pairs:
+            ordered_pairs.append(sorted(bond))
+
+    ax = plt.axes(projection="3d")
+    for pair in ordered_pairs:
+       ax.plot([trj[pair[0], 2], trj[pair[1], 2]], [trj[pair[0], 3], trj[pair[1], 3]],
+               [trj[pair[0], 4], trj[pair[1], 4]])
+    plt.show()
+    return None

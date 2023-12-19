@@ -495,7 +495,8 @@ class Trajectory:
 
         return self.ion_distance
 
-    def get_hydrogen_bonds(self, timestep: int=0, starting_oh: bool=True) -> []:
+    def get_hydrogen_bonds(self, timestep: int=0, starting_oh: bool=True,
+                           starting_random: bool=False, cutoff: float=3.6) -> []:
         '''
         Method to calculate the hydrogen bonded molecules in water.
         :param timestep: Timestep at which point in the trajectory the bonding gets calculated
@@ -511,9 +512,9 @@ class Trajectory:
         for O_atom in range(self.s2[timestep].shape[0]):
             temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
             molecules.append(temp)
-            if len(temp)==4:
+            if len(temp) == 4:
                 h3o_ind = O_atom
-            if len(temp)==2:
+            if len(temp) == 2:
                 oh_ind = O_atom
 
 
@@ -521,6 +522,9 @@ class Trajectory:
             root = oh_ind
         else:
             root = h3o_ind
+        if starting_random:
+            root = np.random.randint(0, len(molecules))
+            print(root)
 
         marked = [False] * len(molecules)
         bonding_list = []
@@ -533,23 +537,41 @@ class Trajectory:
                                      box=self.box_size[timestep])
         while len(stack) > 0:
             vertex = stack.pop()
-            if not marked[vertex]:
-                neighbours = neighbour_tree.query_ball_point(scale_O[vertex], r=3.0)
-                for neigbour in neighbours:
 
+            if not marked[vertex]:
+                print(vertex)
+                # gives me the neighbours(O-Atoms=Center of molecule) of the current vertex within a cutoff distance
+                #neighbours = neighbour_tree.query_ball_point(scale_O[vertex], r=cutoff)
+                _, neighbours = neighbour_tree.query(scale_O[vertex, :], k=20, workers=2)
+                #neighbours = neighbour_tree.query_ball_tree()
+                #[1:] to avoid counting current vertex as neighbour
+
+                hbond_neighbours = []
+                for neighbour in neighbours[1:]:
+                    #checks if there are any Hbonds between vertex molecules and neighbourings
                     is_bonded=check_hbond(scale_O,
                                     scale_H,
                                     molecules[vertex],
-                                    molecules[neigbour],
-                                    box=self.box_size[timestep])
+                                    molecules[neighbour],
+                                    box=self.box_size[timestep],
+                                    max_distance=cutoff,
+                                          min_angle=120.0)
                     if is_bonded:
-                        bonding_list.append((vertex, neigbour))
+                        bonding_list.append((vertex, neighbour))
+                        hbond_neighbours.append(neighbour)
                 marked[vertex] = True
 
-                for water in neighbours:
+                for water in hbond_neighbours:
                     if not marked[water]:
                         stack.append(water)
-        return bonding_list
+
+        unique_O_list = []
+        for pair in bonding_list:
+            for O in pair:
+                if O not in unique_O_list:
+                    unique_O_list.append(O)
+
+        return bonding_list, unique_O_list
 
     def get_rdf_rdfpy(self, snapshot: int=0, increment: float=0.005, gr_type: str="OO", par: bool=False):
         '''
@@ -775,7 +797,7 @@ class Trajectory:
             reference_H = H_list[np.argwhere(self.indexlist == id).reshape(-1), :]
             distances = []
 
-            for i in range(len(O_list)):
+            for i in range(1, len(O_list)):
                 temp = get_distance(reference_O, O_list[i, :])
 
                 if temp == 0.0:
@@ -1216,7 +1238,7 @@ class Trajectory:
                 temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
                 molecules.append(temp)
             recombination_time = i
-            if all([len(_list) for _list in molecules]) == 3:
+            if all([len(_list) == 3 for _list in molecules]):
                 return recombination_time, True
         if self.verbosity == "loud":
             print("Trajectory did not recombine")
