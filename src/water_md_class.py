@@ -572,7 +572,7 @@ class Trajectory:
                 if O not in unique_O_list:
                     unique_O_list.append(O)
 
-        return bonding_list, unique_O_list
+        return bonding_list, unique_O_list, (oh_ind, h3o_ind)
 
     def get_rdf_rdfpy(self, snapshot: int=0, increment: float=0.005, gr_type: str="OO", par: bool=False):
         '''

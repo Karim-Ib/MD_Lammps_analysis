@@ -117,7 +117,7 @@ def plot_rdf(gr: np.ndarray, r: np.ndarray, type: str="OO") -> None:
     return None
 
 
-def plot_hbonds(bonds: [tuple], trj: [list], ion_type: str="OH") -> None:
+def plot_hbonds(bonds: [tuple], trj: [list], ions: (int, int), start: str="OH") -> None:
 
     ordered_pairs = []
 
@@ -130,7 +130,7 @@ def plot_hbonds(bonds: [tuple], trj: [list], ion_type: str="OH") -> None:
     for pair in ordered_pairs:
        ax.plot([trj[pair[0], 2], trj[pair[1], 2]], [trj[pair[0], 3], trj[pair[1], 3]],
                [trj[pair[0], 4], trj[pair[1], 4]])
-    ax.scatter(trj[bonds[0][0], 2], trj[bonds[0][0], 3], trj[bonds[0][0], 4], marker="x", s=20, c="black", label=ion_type)
+    ax.scatter(trj[bonds[0][0], 2], trj[bonds[0][0], 3], trj[bonds[0][0], 4], marker="x", s=20, c="black", label=start)
     plt.legend()
     plt.show()
     return None
