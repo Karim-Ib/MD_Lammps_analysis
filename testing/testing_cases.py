@@ -22,8 +22,7 @@ def read_lammps_test(path, format="lammpstrj", scaled=1):
     print(traj.recombination_time)
     traj.verbosity="loud"
     traj.indexlist, _ = traj.get_neighbour_KDT()
-    traj.get_displace(snapshot=0, path=r'C:/Users/Nutzer/Documents/GitHub/MD_Lammps_analysis_class/testing/', eps=0.05
-                      )
+    #traj.get_displace(snapshot=0, path=r'C:/Users/Nutzer/Documents/GitHub/MD_Lammps_analysis_class/testing/', eps=0.05)
 
     return traj
 

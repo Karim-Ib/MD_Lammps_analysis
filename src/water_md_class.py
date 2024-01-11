@@ -532,6 +532,7 @@ class Trajectory:
 
         scale_O = scale_to_box(self.s2[timestep][:, 2:], self.box_size[timestep])
         scale_H = scale_to_box(self.s1[timestep][:, 2:], self.box_size[timestep])
+        #recheck
         neighbour_tree = set_ckdtree(scale_O,
                                      n_leaf=self.s2[timestep].shape[0],
                                      box=self.box_size[timestep])
@@ -555,7 +556,7 @@ class Trajectory:
                                     molecules[neighbour],
                                     box=self.box_size[timestep],
                                     max_distance=cutoff,
-                                          min_angle=120.0)
+                                          min_angle=150.0)
                     if is_bonded:
                         bonding_list.append((vertex, neighbour))
                         hbond_neighbours.append(neighbour)

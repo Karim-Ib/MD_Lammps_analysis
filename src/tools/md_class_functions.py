@@ -533,7 +533,7 @@ def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neig
     #need to do some shifting to make sure i dont run into pbc issues.
 
     v_shift = np.array([x/2 for x in box]) - traj_H[bonding_H, :]
-
+    #todo: try build "HB-cluster" with the hydrogen assigned to the 2nd closest oxygen - similar to how we form molecules
     # D=donor, A=acceptor
 
     H = traj_H[bonding_H, :] + v_shift
@@ -544,8 +544,10 @@ def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neig
     OD = check_pbc(OD, box)
     OA = check_pbc(OA, box)
 
+
+    #todo: recheck vector orientation if vec(H,D) and vec(D,H) results in the same angle with vec(H,A)
     r_hd = OD - H
-    r_ha = OA - H
+    r_ha = H - OA
 
     # calculate the angle between Hydrogen-Donor and Hydrogen-Acceptor vectors
     argument = np.dot(r_hd, r_ha) / (np.linalg.norm(r_hd) * np.linalg.norm(r_ha))
