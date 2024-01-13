@@ -576,6 +576,7 @@ class Trajectory:
 
     def get_rdf_rdfpy(self, snapshot: int=0, increment: float=0.005, gr_type: str="OO", par: bool=False):
         '''
+        TODO: deprecated
         Method to calculate the radial distribution function. Wraps around the rdfpy package from
         Batuhan Yildirim and Hamish Galloway Brown
         :return:
@@ -610,7 +611,7 @@ class Trajectory:
 
     def get_rdf(self, snapshot: int=0, gr_type: str="OO", n_bins: int=50,
                 start: float=0.01, stop: float= None, n_parallel: int=4, single=False) -> (np.ndarray, np.ndarray):
-
+        #todo: not working properly either fix or remove
         if single:
             if gr_type == "OO":
                 upscale, number_density, tree, bin_list, bin_vol = init_rdf(self.s2[snapshot], self.box_size[snapshot],
@@ -672,6 +673,9 @@ class Trajectory:
         :return: g_r and r
         '''
         if single_frame:
+            if gr_type=="OH_ion" or gr_type=="H3O_ion":
+                print("Combination of single_frame and Ion RDF is not supported.")
+                return None
             if gr_type=="OO":
                 gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
                                        stop=stop)
@@ -714,6 +718,41 @@ class Trajectory:
 
                 rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
                 return rdf_list, r
+
+            if gr_type=="OH_ion":
+                rdf_list = np.zeros((self.recombination_time, n_bins -1))
+                for snap in range(self.recombination_time):
+                    indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=snap)
+                    for O_atom in range(self.s2[snap].shape[0]):
+                        temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+                        if len(temp) == 2:
+                            oh_ind = O_atom
+                            break
+
+                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
+                                           stop=stop, data_2=self.s2[snap][oh_ind, :], ion=True)
+                    rdf_list[snap, :] = gr
+
+                rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
+                return rdf_list, r
+
+            if gr_type=="H3O_ion":
+                rdf_list = np.zeros((self.recombination_time, n_bins -1))
+                for snap in range(self.recombination_time):
+                    indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=snap)
+                    for O_atom in range(self.s2[snap].shape[0]):
+                        temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+                        if len(temp) == 4:
+                            h3o_ind = O_atom
+                            break
+
+                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
+                                           stop=stop, data_2=self.s2[snap][h3o_ind, :], ion=True)
+                    rdf_list[snap, :] = gr
+
+                rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
+                return rdf_list, r
+
 
     def plot_water_hist(self, index_list: np.ndarray = None) -> None:
         '''

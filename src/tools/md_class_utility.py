@@ -134,3 +134,23 @@ def plot_hbonds(bonds: [tuple], trj: [list], ions: (int, int), start: str="OH") 
     plt.legend()
     plt.show()
     return None
+
+
+def save_HB_for_ovito(trj: Trajectory, HB_oxygen_ids: list[int], ts: int=10, path: str="") -> None:
+    with open(path+"oxygen_hbonds.lammpstrj", "w") as hb:
+        hb.write('ITEM: TIMESTEP\n')
+        hb.write(f'{0 * ts}\n')
+        hb.write("ITEM: NUMBER OF ATOMS\n")
+        hb.write(str(len(HB_oxygen_ids)) + "\n")
+        # group_traj.write("ITEM: BOX BOUNDS xy xz yz pp pp pp\n")
+        hb.write("ITEM: BOX BOUNDS pp pp pp\n")
+        for i in range(3):
+            temp = " ".join(map(str, trj.box_dim[ts][i, :]))
+            hb.write(temp + "\n")
+
+        hb.write("ITEM: ATOMS id type xs ys zs\n")
+        for O in HB_oxygen_ids:
+            temp = trj.s2[ts][O, :]
+            temp = " ".join(map(str, temp))
+            hb.write(temp+"\n")
+    return None

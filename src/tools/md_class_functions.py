@@ -302,20 +302,27 @@ def set_ckdtree(input_data: np.ndarray, n_leaf: int, box: np.ndarray) -> cKDTree
     return tree
 
 
-def scale_to_box(data: np.ndarray, box: []) -> np.ndarray:
+def scale_to_box(data: np.ndarray, box: [], is_1d: bool=False) -> np.ndarray:
     '''
     wraper to calculate the upscaled coordinates
     #todo:: check if data is scaled!
     :param data: data to scale
     :param box: appropriate box dimensions
+    :param is_1d: boolean default=False, checks if the data array is 1D or not. used incase of ion scaling
     :return: scaled data
     '''
     upscale = np.zeros(data.shape)
 
-    upscale[:, 0] = np.multiply(data[:, 0], box[0])
-    upscale[:, 1] = np.multiply(data[:, 1], box[1])
-    upscale[:, 2] = np.multiply(data[:, 2], box[2])
-    return upscale
+    if not is_1d:
+        upscale[:, 0] = np.multiply(data[:, 0], box[0])
+        upscale[:, 1] = np.multiply(data[:, 1], box[1])
+        upscale[:, 2] = np.multiply(data[:, 2], box[2])
+        return upscale
+    if is_1d:
+        upscale[0] = np.multiply(data[0], box[0])
+        upscale[1] = np.multiply(data[1], box[1])
+        upscale[2] = np.multiply(data[2], box[2])
+        return upscale
 
 
 def get_sphere_volume(r: float) -> float:
@@ -328,7 +335,7 @@ def get_sphere_volume(r: float) -> float:
 
 
 def init_rdf(data: np.ndarray, box: np.ndarray, n_bins: int, start: float,
-             stop: float=None, data_2: np.ndarray=None):
+             stop: float=None, data_2: np.ndarray=None, ion: bool=False):
 
     '''
     Initializes Objects to calculate the rdf from
@@ -338,6 +345,7 @@ def init_rdf(data: np.ndarray, box: np.ndarray, n_bins: int, start: float,
     :param start: start radius
     :param stop: end radius
     :param data_2: optional, positions of 2nd particle type
+    :param ion: bool, default false. Sets calculation mode for the rdf incase of ions
     :return: returns the scaled data, number density, the periodic tree, the bin list and bin volumes
     '''
 
@@ -360,13 +368,17 @@ def init_rdf(data: np.ndarray, box: np.ndarray, n_bins: int, start: float,
     if data_2 is None:
         return upscale, number_density, tree, bin_list, bin_vol, None
     else:
-        upscale_2 = scale_to_box(data_2[:, 2:], box)
-        return upscale, upscale_2, upscale_2.shape[0]/Vol, tree, bin_list, bin_vol
+        if not ion:
+            upscale_2 = scale_to_box(data_2[:, 2:], box)
+            return upscale, upscale_2.shape[0]/Vol, tree, bin_list, bin_vol, upscale_2
+        if ion:
+            upscale_2 = scale_to_box(data_2[2:], box, ion)
+            return upscale, upscale_2.shape[0]/Vol, tree, bin_list, bin_vol, upscale_2
 
 
 def calculate_rdf(data: np.ndarray, rho: float, tree: cKDTree, bins: np.ndarray,
                   bin_v: np.ndarray, n_cores: int=4) -> (np.ndarray, np.ndarray):
-
+    #todo: check implementation of this method
     '''
     Function to calculate the rdf
     :param data: data to query from the tree
@@ -399,12 +411,13 @@ def calculate_rdf(data: np.ndarray, rho: float, tree: cKDTree, bins: np.ndarray,
     return count/rho, bins
 
 
-def get_all_distances(data: np.ndarray, box: []=None, data_2: np.ndarray=None) -> np.ndarray:
+def get_all_distances(data: np.ndarray, box: []=None, data_2: np.ndarray=None, is_1d: bool=False) -> np.ndarray:
     '''
     function to calculate distances, using pbc, for all pairs.
     :param data: reference coordinates to calculate distances from
     :param box: box size used for pbc
     :param data_2: optional 2nd set of data for pair correlations
+    :param is_1d: boolean default=False, checks if the data array is 1D or not. used incase of ion scaling
     :return: array with all distance combinations
     '''
 
@@ -417,12 +430,21 @@ def get_all_distances(data: np.ndarray, box: []=None, data_2: np.ndarray=None) -
                                                           mode="pbc", box=box)
         return distances
     else:
-        distances = np.zeros((data.shape[0], data_2.shape[0]))
-        for o_atom in range(data.shape[0]):
-            for h_atom in range(data_2.shape[0]):
-                distances[o_atom, h_atom] = get_distance(data[o_atom, :], data_2[h_atom, :],
-                                                         mode="pbc", box=box)
-        return distances
+        if not is_1d:
+            distances = np.zeros((data.shape[0], data_2.shape[0]))
+            for o_atom in range(data.shape[0]):
+                for h_atom in range(data_2.shape[0]):
+                    distances[o_atom, h_atom] = get_distance(data[o_atom, :], data_2[h_atom, :],
+                                                             mode="pbc", box=box)
+            return distances
+        if is_1d:
+            #case if this is used for ion rdf calculation
+            distances = np.zeros((data.shape[0], len(data_2)))
+            for o_atom in range(data.shape[0]):
+                for h_atom in range(len(data_2)):
+                    distances[o_atom, h_atom] = get_distance(data[o_atom, :], data_2[h_atom],
+                                                             mode="pbc", box=box)
+            return distances
 
 
 def count_rdf_hist(distances: np.ndarray, bins: np.ndarray) -> np.ndarray:
@@ -442,7 +464,7 @@ def count_rdf_hist(distances: np.ndarray, bins: np.ndarray) -> np.ndarray:
 
 
 def calc_rdf_rdist(data: [np.ndarray], box: [np.ndarray], data_2: [np.ndarray]=None, snapshot: int=0,
-                  n_bins: int=50, start: float=0.01, stop: float=None)-> (np.ndarray, np.ndarray):
+                  n_bins: int=50, start: float=0.01, stop: float=None, ion: bool=False)-> (np.ndarray, np.ndarray):
     '''
     Wraper to combine the rdf calculation process for the radius distance binning method.
     :param data: reference data to calculate rdf from
@@ -452,12 +474,13 @@ def calc_rdf_rdist(data: [np.ndarray], box: [np.ndarray], data_2: [np.ndarray]=N
     :param n_bins: number of bins
     :param start: start radius, default 0.01
     :param stop: end radius, defaults to min(box size)/2
+    :param ion: bool, default false. Sets calculation mode for the rdf incase of ions
     :return: returns (gr, r)
     '''
     upscale, number_density, _, bin_list, bin_vol, upscale_2 = init_rdf(data[snapshot], box[snapshot],
-                                                             n_bins, start, stop, data_2)
+                                                             n_bins, start, stop, data_2, ion)
 
-    distance = get_all_distances(upscale, box[snapshot], upscale_2)
+    distance = get_all_distances(upscale, box[snapshot], upscale_2, ion)
     counter = count_rdf_hist(distance, bins=bin_list)
     counter = np.divide(counter, bin_vol[1:])
 
