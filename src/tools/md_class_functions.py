@@ -540,7 +540,7 @@ def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neig
     OO_distance = get_distance(x=traj_O[current_mol[-1], :], y=traj_O[neighbour_mol[-1], :], box=box, mode="pbc")
 
     if OO_distance > max_distance:
-        print(f'failed disstance check: {OO_distance}')
+        #print(f'failed disstance check: {OO_distance}')
         return False
 
 
@@ -556,8 +556,6 @@ def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neig
     #need to do some shifting to make sure i dont run into pbc issues.
 
     v_shift = np.array([x/2 for x in box]) - traj_H[bonding_H, :]
-    #todo: try build "HB-cluster" with the hydrogen assigned to the 2nd closest oxygen - similar to how we form molecules
-    # D=donor, A=acceptor
 
     H = traj_H[bonding_H, :] + v_shift
     OD = traj_O[current_mol[-1], :] + v_shift
@@ -567,8 +565,6 @@ def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neig
     OD = check_pbc(OD, box)
     OA = check_pbc(OA, box)
 
-
-    #todo: recheck vector orientation if vec(H,D) and vec(D,H) results in the same angle with vec(H,A)
     r_hd = OD - H
     r_ha = H - OA
 
@@ -578,8 +574,8 @@ def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neig
     theta = np.degrees(np.arccos(argument))
     #theta = 360 * (np.arctan2(np.linalg.norm(np.cross(r_hd, r_ha)), np.dot(r_hd, r_ha))) / (2 * np.pi)
     if theta >= min_angle:
-        print(f'passed angle check: {theta}')
+        #print(f'passed angle check: {theta}')
         return True
     else:
-        print(f'failed angle check: {theta}')
+        #print(f'failed angle check: {theta}')
         return False

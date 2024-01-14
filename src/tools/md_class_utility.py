@@ -2,6 +2,7 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
+from matplotlib.widgets import Slider
 from src.water_md_class import Trajectory
 
 
@@ -117,7 +118,7 @@ def plot_rdf(gr: np.ndarray, r: np.ndarray, type: str="OO") -> None:
     return None
 
 
-def plot_hbonds(bonds: [tuple], trj: [list], ions: (int, int), start: str="OH") -> None:
+def plot_hbonds_single(bonds: [tuple], trj: [list], start: str="OH") -> None:
 
     ordered_pairs = []
 
@@ -135,6 +136,41 @@ def plot_hbonds(bonds: [tuple], trj: [list], ions: (int, int), start: str="OH") 
     plt.show()
     return None
 
+def plot_hbond_network(oh_bonds: [], h3_bonds: [], trj: [], ions: (int, int)) -> None:
+
+    oh_ordered = []
+    h3_ordered = []
+
+    ax = plt.axes(projection="3d")
+    if len(oh_bonds) != 0:
+        for bond in oh_bonds:
+            temp = sorted(bond)
+            if temp not in oh_ordered:
+                oh_ordered.append(temp)
+        for oh_bond in oh_ordered:
+            ax.plot([trj[oh_bond[0], 2], trj[oh_bond[1], 2]], [trj[oh_bond[0], 3], trj[oh_bond[1], 3]],
+                    [trj[oh_bond[0], 4], trj[oh_bond[1], 4]], c="blue")
+    else:
+        oh_ordered.append(ions[0])
+
+    if len(h3_bonds) != 0:
+        for bond in h3_bonds:
+            temp = sorted(bond)
+            if temp not in h3_ordered:
+                h3_ordered.append(temp)
+        for h3_bond in h3_ordered:
+            ax.plot([trj[h3_bond[0], 2], trj[h3_bond[1], 2]], [trj[h3_bond[0], 3], trj[h3_bond[1], 3]],
+                    [trj[h3_bond[0], 4], trj[h3_bond[1], 4]], c="yellow")
+    else:
+        h3_ordered.append(ions[1])
+
+    ax.scatter(trj[ions[0], 2], trj[ions[0], 3], trj[ions[0], 4],
+               marker="o", s=20, c="green", label="OH-Ion")
+    ax.scatter(trj[ions[1], 2], trj[ions[1], 3], trj[ions[1], 4],
+               marker="x", s=20, c="orange", label="H3O-Ion")
+    plt.legend()
+    plt.show()
+    return None
 
 def save_HB_for_ovito(trj: Trajectory, HB_oxygen_ids: list[int], ts: int=10, path: str="") -> None:
     with open(path+"oxygen_hbonds.lammpstrj", "w") as hb:
@@ -153,4 +189,72 @@ def save_HB_for_ovito(trj: Trajectory, HB_oxygen_ids: list[int], ts: int=10, pat
             temp = trj.s2[ts][O, :]
             temp = " ".join(map(str, temp))
             hb.write(temp+"\n")
+    return None
+
+def get_HB_timeseries(trj: Trajectory, cutoff: float=2.9) -> []:
+
+    HB_timeseries = []
+
+    for ts in range(trj.recombination_time):
+        bonds_h3, oxygens_h3, ion_ids = trj.get_hydrogen_bonds(timestep=ts, cutoff=cutoff, starting_oh=False)
+        bonds_oh, oxygens_oh, _ = trj.get_hydrogen_bonds(timestep=ts, cutoff=cutoff, starting_oh=True)
+
+        HB_timeseries.append((bonds_oh, bonds_h3, ion_ids))
+
+    return HB_timeseries
+
+
+def plot_HB_timeseries(HB_timeseries: [tuple], trj: []) -> None:
+
+    fig = plt.figure()
+    ax_plot = fig.add_axes([0, 0, 1, 0.8], projection="3d")
+    ax_slider = fig.add_axes([0.1, 0.85, 0.8, 0.1])
+
+    s = Slider(ax=ax_slider, label="Timestep", valmin=0, valmax=len(HB_timeseries)-1, valinit=0, valfmt="%i")
+
+    def update(val):
+        value = int(s.val)
+        ax_plot.cla()
+
+        oh_ordered = []
+        h3_ordered = []
+
+        if len(HB_timeseries[value][0]) != 0:
+            for bond in HB_timeseries[value][0]:
+                temp = sorted(bond)
+                if temp not in oh_ordered:
+                    oh_ordered.append(temp)
+            for oh_bond in oh_ordered:
+                ax_plot.plot([trj[value][oh_bond[0], 2], trj[value][oh_bond[1], 2]],
+                             [trj[value][oh_bond[0], 3], trj[value][oh_bond[1], 3]],
+                             [trj[value][oh_bond[0], 4], trj[value][oh_bond[1], 4]],
+                             c="blue", linewidth=4.0, linestyle='dashed')
+        else:
+            oh_ordered.append(HB_timeseries[value][2][0])
+
+        if len(HB_timeseries[value][1]) != 0:
+            for bond in HB_timeseries[value][1]:
+                temp = sorted(bond)
+                if temp not in h3_ordered:
+                    h3_ordered.append(temp)
+            for h3_bond in h3_ordered:
+                ax_plot.plot([trj[value][h3_bond[0], 2], trj[value][h3_bond[1], 2]],
+                             [trj[value][h3_bond[0], 3], trj[value][h3_bond[1], 3]],
+                             [trj[value][h3_bond[0], 4], trj[value][h3_bond[1], 4]],
+                             c="orange", linewidth=4.0, linestyle='dotted')
+            else:
+                h3_ordered.append(HB_timeseries[value][2][1])
+
+        ax_plot.scatter(trj[value][HB_timeseries[value][2][0], 2], trj[value][HB_timeseries[value][2][0], 3],
+                        trj[value][HB_timeseries[value][2][0], 4], marker="o", s=50, c="green", label="OH-Ion")
+        ax_plot.scatter(trj[value][HB_timeseries[value][2][1], 2], trj[value][HB_timeseries[value][2][1], 3],
+                        trj[value][HB_timeseries[value][2][1], 4],marker="x", s=50, c="red", label="H3O-Ion")
+
+
+    plt.legend()
+    s.on_changed(update)
+    update(0)
+    plt.show()
+
+
     return None

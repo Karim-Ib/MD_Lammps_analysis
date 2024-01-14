@@ -524,7 +524,7 @@ class Trajectory:
             root = h3o_ind
         if starting_random:
             root = np.random.randint(0, len(molecules))
-            print(root)
+            #print(root)
 
         marked = [False] * len(molecules)
         bonding_list = []
@@ -540,7 +540,7 @@ class Trajectory:
             vertex = stack.pop()
 
             if not marked[vertex]:
-                print(vertex)
+                #print(vertex)
                 # gives me the neighbours(O-Atoms=Center of molecule) of the current vertex within a cutoff distance
                 #neighbours = neighbour_tree.query_ball_point(scale_O[vertex], r=cutoff)
                 _, neighbours = neighbour_tree.query(scale_O[vertex, :], k=20, workers=2)
