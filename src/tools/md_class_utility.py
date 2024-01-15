@@ -206,7 +206,7 @@ def plot_hbond_network(oh_bonds: [], h3_bonds: [], trj: [], ions: (int, int)) ->
     return None
 
 
-def save_HB_for_ovito(trj: Trajectory, HB_oxygen_ids: list[int], ts: int=10, path: str="") -> None:
+def save_HB_for_ovito(trj: Trajectory, HB_oxygen_ids: [], ts: int=10, path: str="") -> None:
     '''
     Function to save the hydrogen bonding partners (oxygens) in a format readable by ovito
     :param trj: Trajectory Class Object
@@ -231,6 +231,49 @@ def save_HB_for_ovito(trj: Trajectory, HB_oxygen_ids: list[int], ts: int=10, pat
             temp = trj.s2[ts][O, :]
             temp = " ".join(map(str, temp))
             hb.write(temp+"\n")
+    return None
+
+
+def save_HB_Network_ovito(trj: Trajectory, cutoff: float=2.9, path: str="") -> None:
+    H3O = []
+    OH = []
+    with open(path + "HB_network.lammpstrj", "w") as hb:
+        for ts in range(trj.recombination_time):
+            bonds_h3, oxygens_h3, ion_ids = trj.get_hydrogen_bonds(timestep=ts, cutoff=cutoff, starting_oh=False)
+            bonds_oh, oxygens_oh, _ = trj.get_hydrogen_bonds(timestep=ts, cutoff=cutoff, starting_oh=True)
+            H3O.append(oxygens_h3)
+            OH.append(oxygens_oh)
+
+            hb.write('ITEM: TIMESTEP\n')
+            hb.write(f'{ts}\n')
+            hb.write("ITEM: NUMBER OF ATOMS\n")
+            hb.write(str(len(oxygens_h3)+len(oxygens_oh)+2) + "\n")
+            # group_traj.write("ITEM: BOX BOUNDS xy xz yz pp pp pp\n")
+            hb.write("ITEM: BOX BOUNDS pp pp pp\n")
+            for i in range(3):
+                temp = " ".join(map(str, trj.box_dim[ts][i, :]))
+                hb.write(temp + "\n")
+
+            hb.write("ITEM: ATOMS id type xs ys zs\n")
+            for O in oxygens_oh:
+                temp = trj.s2[ts][O, :]
+                temp = " ".join(map(str, temp))
+                hb.write(temp+"\n")
+            for O in oxygens_h3:
+                temp = trj.s2[ts][O, :]
+                temp[1] = 1
+                temp = " ".join(map(str, temp))
+                hb.write(temp+"\n")
+
+            temp = trj.s2[ts][ion_ids[0], :]
+            temp[1] = 3
+            temp = " ".join(map(str, temp))
+            hb.write(temp + "\n")
+            temp = trj.s2[ts][ion_ids[1], :]
+            temp[1] = 4
+            temp = " ".join(map(str, temp))
+            hb.write(temp + "\n")
+
     return None
 
 

@@ -19,10 +19,10 @@ trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)
 
 
 
-hb_ts = get_HB_timeseries(trj, cutoff=2.9)
-
+#hb_ts = get_HB_timeseries(trj, cutoff=2.9)
+save_HB_Network_ovito(trj)
 #plot_HB_timeseries(hb_ts, trj.s2)
-plot_HB_ratio(hb_ts, trj.n_atoms, apply_smoothing=True, window=20)
+#plot_HB_ratio(hb_ts, trj.n_atoms, apply_smoothing=True, window=20)
 #print(len(bonds_h3))
 #plot_hbond_network(bonds_oh, bonds_h3, trj.s2[ts], ion_ids_h3)
 
