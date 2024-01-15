@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import os
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
@@ -100,6 +101,7 @@ def plot_ion_speed(oh: np.ndarray, h3o: np.ndarray, dt: float=0.0005) -> None:
 
     return None
 
+
 def plot_rdf(gr: np.ndarray, r: np.ndarray, type: str="OO") -> None:
 
     fig, ax = plt.subplots()
@@ -135,6 +137,7 @@ def plot_hbonds_single(bonds: [tuple], trj: [list], start: str="OH") -> None:
     plt.legend()
     plt.show()
     return None
+
 
 def plot_hbond_network(oh_bonds: [], h3_bonds: [], trj: [], ions: (int, int)) -> None:
 
@@ -172,6 +175,7 @@ def plot_hbond_network(oh_bonds: [], h3_bonds: [], trj: [], ions: (int, int)) ->
     plt.show()
     return None
 
+
 def save_HB_for_ovito(trj: Trajectory, HB_oxygen_ids: list[int], ts: int=10, path: str="") -> None:
     with open(path+"oxygen_hbonds.lammpstrj", "w") as hb:
         hb.write('ITEM: TIMESTEP\n')
@@ -190,6 +194,7 @@ def save_HB_for_ovito(trj: Trajectory, HB_oxygen_ids: list[int], ts: int=10, pat
             temp = " ".join(map(str, temp))
             hb.write(temp+"\n")
     return None
+
 
 def get_HB_timeseries(trj: Trajectory, cutoff: float=2.9) -> []:
 
@@ -249,12 +254,80 @@ def plot_HB_timeseries(HB_timeseries: [tuple], trj: []) -> None:
                         trj[value][HB_timeseries[value][2][0], 4], marker="o", s=50, c="green", label="OH-Ion")
         ax_plot.scatter(trj[value][HB_timeseries[value][2][1], 2], trj[value][HB_timeseries[value][2][1], 3],
                         trj[value][HB_timeseries[value][2][1], 4],marker="x", s=50, c="red", label="H3O-Ion")
+        ax_plot.set_title("Hydrogenbond Network")
 
-
-    plt.legend()
     s.on_changed(update)
     update(0)
+    plt.legend()
     plt.show()
 
 
     return None
+
+
+def plot_HB_ratio(HB_timeseries: [tuple], n_atoms: int, apply_smoothing: bool=False, window: int=5) -> None:
+
+    o_atoms = int(n_atoms / 3)
+    steps = len(HB_timeseries)
+    oh_hb_counter = np.empty(steps)
+    h3_hb_counter = np.empty(steps)
+
+    for id, item in enumerate(HB_timeseries):
+        oh_hb_counter[id] = len(item[0])
+        h3_hb_counter[id] = len(item[1])
+
+    oh_ratio = oh_hb_counter / o_atoms
+    h3_ratio = h3_hb_counter / o_atoms
+
+    time_axis = np.linspace(0, steps, steps)
+
+    fig, ax = plt.subplots()
+
+    ax.plot(time_axis, oh_ratio, c="lightblue", label="OH-Bonds")
+    ax.plot(time_axis, h3_ratio, c="orange", label="H3O-Bonds")
+    if apply_smoothing:
+        oh_ratio_smooth = calculate_hma(oh_ratio, window)
+        h3_ratio_smooth = calculate_hma(h3_ratio, window)
+        ax.plot(time_axis, oh_ratio_smooth, c="green", label="HMA OH", linestyle='dashed', linewidth=4.0)
+        ax.plot(time_axis, h3_ratio_smooth, c="red", label="HMA H3O", linestyle='dashed', linewidth=4.0)
+    ax.set_xlabel("Timestep")
+    ax.set_ylabel("Ratio of count(HB)/num(Oxygen)")
+    ax.set_title("Ratio of the Ion-HB Networks, normalized by number of O Atoms")
+    plt.legend()
+    plt.show()
+
+    fig, ax = plt.subplots()
+    ax.plot(time_axis, oh_hb_counter+h3_hb_counter, c="blue", label="HB-Bonds")
+    if apply_smoothing:
+        smoothed_counter = calculate_hma(oh_hb_counter+h3_hb_counter, window)
+        ax.plot(time_axis, smoothed_counter, c="green", label="HMA Bonds", linestyle="dashed", linewidth=4.0)
+    ax.set_xlabel("Timestep")
+    ax.set_ylabel("Number of HB")
+    ax.set_title("Total number of Ion HB per Timestep")
+    plt.legend()
+    plt.show()
+
+    return None
+
+
+def calculate_hma(data: np.ndarray, _window: int=5) -> np.ndarray:
+    '''
+    Implementation of the Hull Movingaverage smoothing function
+    :param data: data to smooth
+    :param _window: window of the moving average
+    :return: pandas dataframe of smoothed data
+    '''
+    def calculate_wma(data: pd.DataFrame, weights: np.ndarray) -> pd.DataFrame:
+        return np.sum(data * weights) / np.sum(weights)
+
+
+    pd_data = pd.DataFrame(data.transpose())
+
+
+    wma_1 = pd_data.rolling(window=int(_window / 2), center=False).apply(calculate_wma,
+                                                                        args=(np.arange(1, int(_window / 2 )+1),))
+
+    wma_2 = pd_data.rolling(window=int(_window), center=False).apply(calculate_wma,
+                                                                        args=(np.arange(1, _window+1),))
+    hma = (2 * wma_1 - wma_2).rolling(window=int(np.sqrt(_window)), center=False).mean()
+    return (hma.transpose()).fillna(value=0).to_numpy()[0]
