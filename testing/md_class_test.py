@@ -4,12 +4,12 @@ from testing_cases import read_lammps_test, MSD_test
 from src.tools.md_class_utility import *
 
 ts = 110
-trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)
+trj = read_lammps_test(path="cluster_run_150.lammpstrj")
 #msd = trj.get_MSD()
 #plot_MSD(msd)
-#g_r, r= trj.get_rdf_rdist(180, gr_type="OH_ion", n_bins=150, start=0.01, single_frame=False)
-
-#plot_rdf(g_r, r, "OH-O")
+g_r, r= trj.get_rdf_rdist(180, gr_type="H3O_ion", n_bins=150, start=0.01, single_frame=False)
+#g_r, r= trj.get_rdf_rdist(180, gr_type="OO", n_bins=150, start=0.01, single_frame=False)
+plot_rdf(g_r, r, "H3O-O")
 #oh, h3 = trj.get_ion_speed()
 #plot_ion_speed(oh, h3)
 
@@ -20,7 +20,7 @@ trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)
 
 
 #hb_ts = get_HB_timeseries(trj, cutoff=2.9)
-save_HB_Network_ovito(trj)
+#save_HB_Network_ovito(trj)
 #plot_HB_timeseries(hb_ts, trj.s2)
 #plot_HB_ratio(hb_ts, trj.n_atoms, apply_smoothing=True, window=20)
 #print(len(bonds_h3))

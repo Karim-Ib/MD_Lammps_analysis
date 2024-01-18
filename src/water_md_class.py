@@ -692,7 +692,7 @@ class Trajectory:
         if not single_frame:
             if gr_type=="OO":
                 rdf_list = np.zeros((self.n_snapshots, n_bins -1))
-                for snap in range(self.n_snapshots ):
+                for snap in range(self.n_snapshots):
 
                     gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snap, n_bins=n_bins, start=start,
                                            stop=stop)
@@ -716,12 +716,14 @@ class Trajectory:
                                            stop=stop, data_2=self.s1[snap])
                     rdf_list[snap, :] = gr
 
+
                 rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
                 return rdf_list, r
 
             if gr_type=="OH_ion":
                 rdf_list = np.zeros((self.recombination_time, n_bins -1))
                 for snap in range(self.recombination_time):
+                    # identify ion at each timestep
                     indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=snap)
                     for O_atom in range(self.s2[snap].shape[0]):
                         temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
@@ -729,11 +731,12 @@ class Trajectory:
                             oh_ind = O_atom
                             break
 
-                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
+                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snap, n_bins=n_bins, start=start,
                                            stop=stop, data_2=self.s2[snap][oh_ind, :], ion=True)
                     rdf_list[snap, :] = gr
 
                 rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
+
                 return rdf_list, r
 
             if gr_type=="H3O_ion":
@@ -746,7 +749,7 @@ class Trajectory:
                             h3o_ind = O_atom
                             break
 
-                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
+                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snap, n_bins=n_bins, start=start,
                                            stop=stop, data_2=self.s2[snap][h3o_ind, :], ion=True)
                     rdf_list[snap, :] = gr
 

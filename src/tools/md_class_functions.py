@@ -373,7 +373,7 @@ def init_rdf(data: np.ndarray, box: np.ndarray, n_bins: int, start: float,
             return upscale, upscale_2.shape[0]/Vol, tree, bin_list, bin_vol, upscale_2
         if ion:
             upscale_2 = scale_to_box(data_2[2:], box, ion)
-            return upscale, upscale_2.shape[0]/Vol, tree, bin_list, bin_vol, upscale_2
+            return upscale, number_density, tree, bin_list, bin_vol, upscale_2
 
 
 def calculate_rdf(data: np.ndarray, rho: float, tree: cKDTree, bins: np.ndarray,
@@ -439,15 +439,14 @@ def get_all_distances(data: np.ndarray, box: []=None, data_2: np.ndarray=None, i
             return distances
         if is_1d:
             #case if this is used for ion rdf calculation
-            distances = np.zeros((data.shape[0], len(data_2)))
+            distances = np.zeros(data.shape[0])
             for o_atom in range(data.shape[0]):
-                for h_atom in range(len(data_2)):
-                    distances[o_atom, h_atom] = get_distance(data[o_atom, :], data_2[h_atom],
-                                                             mode="pbc", box=box)
+                distances[o_atom] = get_distance(data[o_atom, :], data_2,
+                                                         mode="pbc", box=box)
             return distances
 
 
-def count_rdf_hist(distances: np.ndarray, bins: np.ndarray) -> np.ndarray:
+def count_rdf_hist(distances: np.ndarray, bins: np.ndarray, ion: bool= False) -> np.ndarray:
     '''
     Function to count the number of distances at each bin
     :param distances:array of all distance combinations
@@ -455,12 +454,16 @@ def count_rdf_hist(distances: np.ndarray, bins: np.ndarray) -> np.ndarray:
     :return: array of the binned distances
     '''
     counter = np.zeros(bins.shape[0] - 1)
+    if not ion:
+        for atom in range(distances.shape[0]):
+            temp, _ = np.histogram(distances[atom, :], bins=bins, density=False)
+            counter += temp
 
-    for atom in range(distances.shape[0]):
-        temp, _ = np.histogram(distances[atom, :], bins=bins, density=False)
+        return counter / distances.shape[0]
+    if ion:
+        temp, _ = np.histogram(distances.reshape(-1), bins=bins, density=False)
         counter += temp
-
-    return counter / distances.shape[0]
+        return counter
 
 
 def calc_rdf_rdist(data: [np.ndarray], box: [np.ndarray], data_2: [np.ndarray]=None, snapshot: int=0,
@@ -481,9 +484,8 @@ def calc_rdf_rdist(data: [np.ndarray], box: [np.ndarray], data_2: [np.ndarray]=N
                                                              n_bins, start, stop, data_2, ion)
 
     distance = get_all_distances(upscale, box[snapshot], upscale_2, ion)
-    counter = count_rdf_hist(distance, bins=bin_list)
+    counter = count_rdf_hist(distance, bins=bin_list, ion=ion)
     counter = np.divide(counter, bin_vol[1:])
-
     return counter / number_density, bin_list[1:]
 
 
