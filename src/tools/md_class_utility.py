@@ -432,3 +432,6 @@ def calculate_hma(data: np.ndarray, _window: int=5) -> np.ndarray:
                                                                         args=(np.arange(1, _window+1),))
     hma = (2 * wma_1 - wma_2).rolling(window=int(np.sqrt(_window)), center=False).mean()
     return (hma.transpose()).fillna(value=0).to_numpy()[0]
+
+
+#def multi_traj_rdf(path: s) -> None:

@@ -3,20 +3,20 @@ import numpy as np
 from testing_cases import read_lammps_test, MSD_test
 from src.tools.md_class_utility import *
 
-ts = 110
-trj = read_lammps_test(path="cluster_run_150.lammpstrj")
+#ts = 110
+#trj = read_lammps_test(path="cluster_run_150.lammpstrj")
 #msd = trj.get_MSD()
 #plot_MSD(msd)
-g_r, r= trj.get_rdf_rdist(180, gr_type="H3O_ion", n_bins=150, start=0.01, single_frame=False)
+#g_r, r= trj.get_rdf_rdist(180, gr_type="H3O_ion", n_bins=150, start=0.01, single_frame=False)
 #g_r, r= trj.get_rdf_rdist(180, gr_type="OO", n_bins=150, start=0.01, single_frame=False)
-plot_rdf(g_r, r, "H3O-O")
+#plot_rdf(g_r, r, "H3O-O")
 #oh, h3 = trj.get_ion_speed()
 #plot_ion_speed(oh, h3)
 
 #bonds_h3, oxygens_h3, ion_ids_h3 = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=False)
 #bonds_oh, oxygens_oh, ion_ids_oh = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=True)
 
-
+#trj.group_molecules()
 
 
 #hb_ts = get_HB_timeseries(trj, cutoff=2.9)
@@ -34,3 +34,36 @@ plot_rdf(g_r, r, "H3O-O")
 #save_HB_for_ovito(trj, oxygens)
 
 
+
+trj_6 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_6.lammpstrj")
+trj_9 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_9.lammpstrj")
+
+gr_6_oh, _ = trj_6.get_rdf_rdist(180, gr_type="OH_ion", n_bins=150, start=0.01, single_frame=False)
+gr_6_h3, _ = trj_6.get_rdf_rdist(180, gr_type="H3O_ion", n_bins=150, start=0.01, single_frame=False)
+
+gr_9_oh, _ = trj_9.get_rdf_rdist(180, gr_type="OH_ion", n_bins=150, start=0.01, single_frame=False)
+gr_9_h3, _ = trj_9.get_rdf_rdist(180, gr_type="H3O_ion", n_bins=150, start=0.01, single_frame=False)
+
+
+gr_6_OO, r = trj_6.get_rdf_rdist(180, gr_type="OO", n_bins=150, start=0.01, single_frame=False)
+
+
+gr_oh = (gr_6_oh + gr_9_oh) / 2
+gr_h3 = (gr_6_h3 + gr_9_h3) / 2
+
+
+
+fig, ax = plt.subplots()
+
+ax.plot(r, gr_oh, color="blue", label="g_OH-(r)")
+ax.plot(r, gr_h3, color="orange", label="g_H3O+(r)")
+ax.plot(r, gr_6_OO, color="green", label="g_OO(r)")
+#ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+#ax.xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
+plt.legend()
+ax.set_xlabel(r'r in Å')
+ax.grid()
+ax.set_ylabel(f"{type}-g(r)")
+ax.set_title(f"{type} Radial distribution function")
+
+plt.show()

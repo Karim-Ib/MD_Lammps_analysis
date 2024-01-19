@@ -162,7 +162,7 @@ class Trajectory:
             print(f'box dimensions: {box_dim}')
         return atom_list, box_dim, n_atoms
 
-    def gromac_to_np(self) -> (np.ndarray, [np.ndarray]):
+    def gromacs_to_np(self) -> (np.ndarray, [np.ndarray]):
         '''
         Method to parse gromac style formated trajectories
         :param file: string giving the lammpstrj file path
