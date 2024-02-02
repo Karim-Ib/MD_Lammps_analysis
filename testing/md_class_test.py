@@ -36,9 +36,24 @@ from src.tools.md_class_utility import *
 
 
 trj_6 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_6.lammpstrj")
-trj_9 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_9.lammpstrj")
 
-gr_6_oh, _ = trj_6.get_rdf_rdist(180, gr_type="OH_ion", n_bins=150, start=0.01, single_frame=False)
+
+
+
+
+trj_6.cut_snapshot(trj_6.recombination_time + 5)
+
+
+
+
+
+
+
+
+
+#trj_9 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_9.lammpstrj")
+
+'''gr_6_oh, _ = trj_6.get_rdf_rdist(180, gr_type="OH_ion", n_bins=150, start=0.01, single_frame=False)
 gr_6_h3, _ = trj_6.get_rdf_rdist(180, gr_type="H3O_ion", n_bins=150, start=0.01, single_frame=False)
 
 gr_9_oh, _ = trj_9.get_rdf_rdist(180, gr_type="OH_ion", n_bins=150, start=0.01, single_frame=False)
@@ -66,4 +81,4 @@ ax.grid()
 ax.set_ylabel(f"{type}-g(r)")
 ax.set_title(f"{type} Radial distribution function")
 
-plt.show()
+plt.show()'''
