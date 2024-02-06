@@ -35,13 +35,13 @@ from src.tools.md_class_utility import *
 
 
 
-trj_6 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_6.lammpstrj")
+#trj_6 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_6.lammpstrj")
 
 
 
 
 
-trj_6.cut_snapshot(trj_6.recombination_time + 5)
+#trj_6.cut_snapshot(trj_6.recombination_time + 5)
 
 
 
@@ -82,3 +82,45 @@ ax.set_ylabel(f"{type}-g(r)")
 ax.set_title(f"{type} Radial distribution function")
 
 plt.show()'''
+
+
+
+
+
+
+def shortest_connection(tree, target):
+
+    # Create a dictionary to represent the tree
+    adjacency_list = {}
+    for parent, child in tree:
+        if parent not in adjacency_list:
+            adjacency_list[parent] = []
+        adjacency_list[parent].append(child)
+
+    # Perform BFS
+    queue = [(None, tree[0][0])]  # (parent, node)
+    visited = {tree[0][0]: None}  # Track visited nodes and their parents
+    while queue:
+        parent, node = queue.pop(0)
+        if node == target:
+            # Backtrack the path from target to root
+            path = [node]
+            while parent is not None:
+                path.append(parent)
+                parent = visited[parent]
+            return path[::-1]  # Reverse the path to get root to target
+        if node in adjacency_list:
+            for child in adjacency_list[node]:
+                queue.append((node, child))
+                visited[child] = node  # Update visited dictionary with child and its parent
+
+test_tree = [(1, 2), (1, 3), (2, 4), (2, 5), (3, 6), (3, 7), (4, 8), (5, 7), (7, 9)]
+
+
+target = 9
+
+shortest_path = shortest_connection(test_tree, target)
+
+print(shortest_path)
+
+
