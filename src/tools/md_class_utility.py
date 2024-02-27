@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 from matplotlib.widgets import Slider
 from src.water_md_class import Trajectory
+from src.tools.md_class_functions import get_distance, scale_to_box
 
 
 def plot_d_rot(rmsd: np.ndarray, timestep: float=0.0005) -> None:
@@ -434,4 +435,99 @@ def calculate_hma(data: np.ndarray, _window: int=5) -> np.ndarray:
     return (hma.transpose()).fillna(value=0).to_numpy()[0]
 
 
-#def multi_traj_rdf(path: s) -> None:
+
+
+def get_hb_wire(bonds, target):
+    '''
+    Function to calcultae the HB wire starting from a H3O+ ion
+    :param bonds: list of tuples containing bonding information
+    :param target: id of the OH- Ion
+    :return: list of molecules in the bond wire
+    '''
+
+    # Create a dictionary to represent the tree
+    adjacency_list = {}
+    for parent, child in bonds:
+        if parent not in adjacency_list:
+            adjacency_list[parent] = []
+        adjacency_list[parent].append(child)
+
+    # Perform BFS
+    queue = [(None, bonds[0][0])]  # (parent, node)
+    visited = {bonds[0][0]: None}  # Track visited nodes and their parents
+    while queue:
+        parent, node = queue.pop(0)
+        if node == target:
+            # Backtrack the path from target to root
+            path = [node]
+            while parent is not None:
+                path.append(parent)
+                parent = visited[parent]
+            return path[::-1]  # Reverse the path to get root to target
+        if node in adjacency_list:
+            for child in adjacency_list[node]:
+                queue.append((node, child))
+                visited[child] = node  # Update visited dictionary with child and its parent
+
+
+def remove_mirror_duplicates(tuple_list: [tuple]) -> [tuple]:
+    '''
+    helper function to remove mirrored duplicates of the form (a, b) -> (b, a)
+    from the list of hb-bonds.
+    :param bonds: list of tuples containing the original bonding paris
+    :return: list of tuples containing the pruned pairs
+    '''
+    # Convert the list to a set of tuples to remove duplicate entries
+    unique_tuples = []  # Initialize an empty list to store unique tuples
+
+    for tuple_item in tuple_list:
+        # Check if the tuple or its mirror exists in the unique_tuples list
+        if tuple_item not in unique_tuples and (tuple_item[1], tuple_item[0]) not in unique_tuples:
+            unique_tuples.append(tuple_item)
+
+    return unique_tuples
+
+def get_last_wire(trj: Trajectory) -> (list[int], list[tuple]):
+    '''
+    Function to calculate the time index of the last HB wire connecting the OH- and H3O+ ions.
+    :param trj: Trajectory Object
+    :return: list of the time indices, list of tuples containing the oxygen index of the Molecules involved in the
+    Hydrogen bonding
+    '''
+    wire_ts = []
+    wire_inds = []
+    for ts in reversed(range(trj.recombination_time)):
+        h3o_bonds, h3o_oxygen, ions = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=False)
+        reduced_bonds = remove_mirror_duplicates(h3o_bonds)
+        h3o_wire = get_hb_wire(reduced_bonds, ions[0])
+
+        if h3o_wire is not None:
+            wire_ts.append(ts)
+            wire_inds.append(h3o_wire)
+            print(f"{ts} wire appended")
+        else:
+            return wire_ts, wire_inds
+
+def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [float]:
+    '''
+    Function to calculate the average molecules (O-O) distance in a Hydrogen-Bond wire
+    :param wire: list of integer list containing the Oxygen Ids
+    :param trj: Trajectory Object
+    :param indices: list of ints containing the timesteps
+    :return: returns list of floats with the distances at the indices (in reversed, meaning ascending, order)
+    '''
+
+    distances = []
+    for ind, ts in enumerate(indices):
+        coords = trj.s2[ts][:, 2:]
+        current_wire = wire[ind]
+        temp = 0
+        for water_mol in range(1, len(current_wire)):
+            temp += get_distance(scale_to_box(data=coords[water_mol - 1, :], box=trj.box_size[ts], is_1d=True),
+                                 scale_to_box(data=coords[water_mol, :], box=trj.box_size[ts], is_1d=True),
+                                 box=trj.box_size[ts], mode="pbc")
+
+        distances.append(temp / len(current_wire))
+
+
+    return distances

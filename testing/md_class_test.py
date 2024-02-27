@@ -3,57 +3,25 @@ import numpy as np
 from testing_cases import read_lammps_test, MSD_test
 from src.tools.md_class_utility import *
 
-#ts = 110
-#trj = read_lammps_test(path="cluster_run_150.lammpstrj")
-#msd = trj.get_MSD()
-#plot_MSD(msd)
-#g_r, r= trj.get_rdf_rdist(180, gr_type="H3O_ion", n_bins=150, start=0.01, single_frame=False)
-#g_r, r= trj.get_rdf_rdist(180, gr_type="OO", n_bins=150, start=0.01, single_frame=False)
-#plot_rdf(g_r, r, "H3O-O")
-#oh, h3 = trj.get_ion_speed()
-#plot_ion_speed(oh, h3)
+ts = 768
+trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)
 
-#bonds_h3, oxygens_h3, ion_ids_h3 = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=False)
-#bonds_oh, oxygens_oh, ion_ids_oh = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=True)
+bonds_h3, oxygens_h3, ion_ids_h3 = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=False)
+bonds_oh, oxygens_oh, ion_ids_oh = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=True)
 
-#trj.group_molecules()
+last_wire, indices = get_last_wire(trj)
 
-
-#hb_ts = get_HB_timeseries(trj, cutoff=2.9)
-#save_HB_Network_ovito(trj)
-#plot_HB_timeseries(hb_ts, trj.s2)
-#plot_HB_ratio(hb_ts, trj.n_atoms, apply_smoothing=True, window=20)
-#print(len(bonds_h3))
-#plot_hbond_network(bonds_oh, bonds_h3, trj.s2[ts], ion_ids_h3)
-
-#print(bonds)
-#print(sorted(bonds[1]))
-
-#plot_hbonds(bonds, trj.s2[ts], ion_ids)
-
-#save_HB_for_ovito(trj, oxygens)
+HB_dist = get_HB_wire_distance(indices, trj, last_wire)
+print(indices)
+print(last_wire)
+print(HB_dist)
 
 
 
 #trj_6 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_6.lammpstrj")
-
-
-
-
-
-#trj_6.cut_snapshot(trj_6.recombination_time + 5)
-
-
-
-
-
-
-
-
-
 #trj_9 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_9.lammpstrj")
-
-'''gr_6_oh, _ = trj_6.get_rdf_rdist(180, gr_type="OH_ion", n_bins=150, start=0.01, single_frame=False)
+'''
+gr_6_oh, _ = trj_6.get_rdf_rdist(180, gr_type="OH_ion", n_bins=150, start=0.01, single_frame=False)
 gr_6_h3, _ = trj_6.get_rdf_rdist(180, gr_type="H3O_ion", n_bins=150, start=0.01, single_frame=False)
 
 gr_9_oh, _ = trj_9.get_rdf_rdist(180, gr_type="OH_ion", n_bins=150, start=0.01, single_frame=False)
@@ -86,41 +54,5 @@ plt.show()'''
 
 
 
-
-
-def shortest_connection(tree, target):
-
-    # Create a dictionary to represent the tree
-    adjacency_list = {}
-    for parent, child in tree:
-        if parent not in adjacency_list:
-            adjacency_list[parent] = []
-        adjacency_list[parent].append(child)
-
-    # Perform BFS
-    queue = [(None, tree[0][0])]  # (parent, node)
-    visited = {tree[0][0]: None}  # Track visited nodes and their parents
-    while queue:
-        parent, node = queue.pop(0)
-        if node == target:
-            # Backtrack the path from target to root
-            path = [node]
-            while parent is not None:
-                path.append(parent)
-                parent = visited[parent]
-            return path[::-1]  # Reverse the path to get root to target
-        if node in adjacency_list:
-            for child in adjacency_list[node]:
-                queue.append((node, child))
-                visited[child] = node  # Update visited dictionary with child and its parent
-
-test_tree = [(1, 2), (1, 3), (2, 4), (2, 5), (3, 6), (3, 7), (4, 8), (5, 7), (7, 9)]
-
-
-target = 9
-
-shortest_path = shortest_connection(test_tree, target)
-
-print(shortest_path)
 
 
