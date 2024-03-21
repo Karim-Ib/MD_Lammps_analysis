@@ -523,11 +523,13 @@ def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [flo
         current_wire = wire[ind]
         temp = 0
         for water_mol in range(1, len(current_wire)):
-            temp += get_distance(scale_to_box(data=coords[water_mol - 1, :], box=trj.box_size[ts], is_1d=True),
-                                 scale_to_box(data=coords[water_mol, :], box=trj.box_size[ts], is_1d=True),
+            temp = get_distance(x=scale_to_box(data=coords[current_wire[water_mol] - 1, :], box=trj.box_size[ts],
+                                             is_1d=True),
+                                 y=scale_to_box(data=coords[current_wire[water_mol], :], box=trj.box_size[ts],
+                                              is_1d=True),
                                  box=trj.box_size[ts], mode="pbc")
-
-        distances.append(temp / len(current_wire))
+            print(current_wire[water_mol] -1, current_wire[water_mol])
+        #distances.append(temp / (len(current_wire)))
 
 
     return distances
