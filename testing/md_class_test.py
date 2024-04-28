@@ -54,5 +54,10 @@ plt.show()'''
 
 
 
+'''print(get_distance(trj.s2[774][115, 2:], trj.s2[774][106, 2:], mode="pbc"))
 
-
+print(get_distance(scale_to_box(trj.s2[774][115, 2:], trj.box_size[774], is_1d=True),
+                   scale_to_box(trj.s2[774][106, 2:], trj.box_size[774], is_1d=True),
+                   box=trj.box_size[774],
+                   mode="pbc"))
+'''
