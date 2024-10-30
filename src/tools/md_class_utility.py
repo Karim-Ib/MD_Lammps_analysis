@@ -4,6 +4,8 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 from matplotlib.widgets import Slider
+from typing import List
+
 from src.water_md_class import Trajectory
 from src.tools.md_class_functions import get_distance, scale_to_box
 
@@ -466,6 +468,8 @@ def get_hb_wire(bonds, target):
             for child in adjacency_list[node]:
                 queue.append((node, child))
                 visited[child] = node  # Update visited dictionary with child and its parent
+
+
 def remove_mirror_duplicates(tuple_list: [tuple]) -> [tuple]:
     '''
     helper function to remove mirrored duplicates of the form (a, b) -> (b, a)
@@ -480,13 +484,16 @@ def remove_mirror_duplicates(tuple_list: [tuple]) -> [tuple]:
         if tuple_item not in unique_tuples and (tuple_item[1], tuple_item[0]) not in unique_tuples:
             unique_tuples.append(tuple_item)
     return unique_tuples
-def get_last_wire(trj: Trajectory) -> (list[int], list[tuple]):
+
+
+def get_last_wire(trj: Trajectory) -> (List[int], List[tuple]):
     '''
     Function to calculate the time index of the last HB wire connecting the OH- and H3O+ ions.
     :param trj: Trajectory Object
     :return: list of the time indices, list of tuples containing the oxygen index of the Molecules involved in the
     Hydrogen bonding
     '''
+
     wire_ts = []
     wire_inds = []
     for ts in reversed(range(trj.recombination_time)):
@@ -499,6 +506,8 @@ def get_last_wire(trj: Trajectory) -> (list[int], list[tuple]):
             print(f"{ts} wire appended")
         else:
             return wire_ts, wire_inds
+
+
 def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [float]:
     '''
     Function to calculate the average molecules (O-O) distance in a Hydrogen-Bond wire
@@ -507,6 +516,7 @@ def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [flo
     :param indices: list of ints containing the timesteps
     :return: returns list of floats with the distances at the indices (in reversed, meaning ascending, order)
     '''
+
     distances = []
     for ind, ts in enumerate(indices):
         coords = trj.s2[ts][:, 2:]

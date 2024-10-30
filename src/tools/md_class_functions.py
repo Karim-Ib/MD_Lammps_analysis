@@ -1,8 +1,9 @@
 import numpy as np
+from typing import Union
 from scipy.spatial import cKDTree
 
 
-def get_distance(x: list, y: list, img: int=None, box: []=None, mode: str='normal') -> float:
+def get_distance(x: Union[list, np.ndarray], y: Union[list, np.ndarray], img: int=None, box: []=None, mode: str='normal') -> float:
     #TODO: check if img, box parameters are needed since we normalize anyways box should always be [1,1,1] for
     # each snapshot
     '''

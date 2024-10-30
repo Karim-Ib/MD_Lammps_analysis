@@ -16,6 +16,7 @@ print(indices)
 print(last_wire)
 print(HB_dist)
 
+plot_HB_timeseries(get_HB_timeseries(trj), trj.s2)
 
 
 #trj_6 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_6.lammpstrj")
