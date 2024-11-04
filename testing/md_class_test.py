@@ -62,3 +62,5 @@ print(get_distance(scale_to_box(trj.s2[774][115, 2:], trj.box_size[774], is_1d=T
                    box=trj.box_size[774],
                    mode="pbc"))
 '''
+
+plot_HB_timeseries(indices, trj.s2)

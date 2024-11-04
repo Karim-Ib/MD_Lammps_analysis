@@ -10,7 +10,12 @@ from src.water_md_class import Trajectory
 from src.tools.md_class_functions import get_distance, scale_to_box
 
 def plot_d_rot(rmsd: np.ndarray, timestep: float=0.0005) -> None:
-
+    '''
+    function to plot the rotational diffusion coefficient
+    :param rmsd: np array of the rmsd
+    :param timestep: resolution
+    :return:
+    '''
     fig, ax = plt.subplots()
 
     ax.scatter(timestep*np.linspace(0,len(rmsd), len(rmsd)), rmsd, color="red", marker="x")
@@ -23,6 +28,8 @@ def plot_d_rot(rmsd: np.ndarray, timestep: float=0.0005) -> None:
     ax.set_title("Rotational Diffusion")
 
     plt.show()
+
+    return None
 
 
 def cut_multiple_snaps(trajectory_obj: Trajectory, folder_output: str, snapshot_list: list) -> None:
@@ -479,10 +486,12 @@ def remove_mirror_duplicates(tuple_list: [tuple]) -> [tuple]:
     '''
     # Convert the list to a set of tuples to remove duplicate entries
     unique_tuples = []  # Initialize an empty list to store unique tuples
+
     for tuple_item in tuple_list:
         # Check if the tuple or its mirror exists in the unique_tuples list
         if tuple_item not in unique_tuples and (tuple_item[1], tuple_item[0]) not in unique_tuples:
             unique_tuples.append(tuple_item)
+
     return unique_tuples
 
 
@@ -500,6 +509,7 @@ def get_last_wire(trj: Trajectory) -> (List[int], List[tuple]):
         h3o_bonds, h3o_oxygen, ions = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=False)
         reduced_bonds = remove_mirror_duplicates(h3o_bonds)
         h3o_wire = get_hb_wire(reduced_bonds, ions[0])
+
         if h3o_wire is not None:
             wire_ts.append(ts)
             wire_inds.append(h3o_wire)
@@ -525,10 +535,77 @@ def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [flo
         print(current_wire)
         for water_mol in range(1, len(current_wire)):
             print((current_wire[water_mol- 1] , current_wire[water_mol]))
+
             temp += get_distance(x=scale_to_box(data=coords[current_wire[water_mol- 1], :], box=trj.box_size[ts],
                                              is_1d=True),
                                  y=scale_to_box(data=coords[current_wire[water_mol], :], box=trj.box_size[ts],
                                               is_1d=True),
                                  box=trj.box_size[ts], mode="pbc")
+
         distances.append(temp / (len(current_wire) - 1))
+
     return distances
+
+
+def plot_HB_wire(wire_index: [tuple], wire_ts: [int], trj: Trajectory) -> None:
+    '''
+    Function to plot the HB wire from the H3O+ towards the OH- ion for a given wire.
+    :param wire_index: tuple of ints denoting the O-Atoms of the Molecules involved
+    :param wire_tx: Timesteps at which the Wire exsited
+    :param trj: Corresponding Trajectory Object
+    :return:
+    '''
+
+
+    fig = plt.figure()
+    ax_plot = fig.add_axes([0, 0, 1, 0.8], projection="3d")
+    ax_slider = fig.add_axes([0.1, 0.85, 0.8, 0.1])
+
+    s = Slider(ax=ax_slider, label="Timestep", valmin=0, valmax=len(wire_ts)-1, valinit=0, valfmt="%i")
+
+    def update(val):
+        value = int(s.val)
+        ax_plot.cla()
+
+        oh_ordered = []
+        h3_ordered = []
+
+        if len(HB_timeseries[value][0]) != 0:
+            for bond in HB_timeseries[value][0]:
+                temp = sorted(bond)
+                if temp not in oh_ordered:
+                    oh_ordered.append(temp)
+            for oh_bond in oh_ordered:
+                ax_plot.plot([trj[value][oh_bond[0], 2], trj[value][oh_bond[1], 2]],
+                             [trj[value][oh_bond[0], 3], trj[value][oh_bond[1], 3]],
+                             [trj[value][oh_bond[0], 4], trj[value][oh_bond[1], 4]],
+                             c="blue", linewidth=4.0, linestyle='dashed')
+        else:
+            oh_ordered.append(HB_timeseries[value][2][0])
+
+        if len(HB_timeseries[value][1]) != 0:
+            for bond in HB_timeseries[value][1]:
+                temp = sorted(bond)
+                if temp not in h3_ordered:
+                    h3_ordered.append(temp)
+            for h3_bond in h3_ordered:
+                ax_plot.plot([trj[value][h3_bond[0], 2], trj[value][h3_bond[1], 2]],
+                             [trj[value][h3_bond[0], 3], trj[value][h3_bond[1], 3]],
+                             [trj[value][h3_bond[0], 4], trj[value][h3_bond[1], 4]],
+                             c="orange", linewidth=4.0, linestyle='dotted')
+            else:
+                h3_ordered.append(HB_timeseries[value][2][1])
+
+        ax_plot.scatter(trj[value][HB_timeseries[value][2][0], 2], trj[value][HB_timeseries[value][2][0], 3],
+                        trj[value][HB_timeseries[value][2][0], 4], marker="o", s=50, c="green", label="OH-Ion")
+        ax_plot.scatter(trj[value][HB_timeseries[value][2][1], 2], trj[value][HB_timeseries[value][2][1], 3],
+                        trj[value][HB_timeseries[value][2][1], 4],marker="x", s=50, c="red", label="H3O-Ion")
+        ax_plot.set_title("Hydrogenbond Network")
+
+    s.on_changed(update)
+    update(0)
+    plt.legend()
+    plt.show()
+
+
+    return None
