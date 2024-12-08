@@ -16,8 +16,8 @@ print(indices)
 print(last_wire)
 print(HB_dist)
 
-plot_HB_timeseries(get_HB_timeseries(trj), trj.s2)
-
+#plot_HB_timeseries(get_HB_timeseries(trj), trj.s2, plot_oxygen=True)
+#plot_HB_ratio(get_HB_timeseries(trj), trj.n_atoms, apply_smoothing=True, window=15)
 
 #trj_6 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_6.lammpstrj")
 #trj_9 = Trajectory(r"C:\Users\Nutzer\Documents\Master Thesis\cluster_data\cluster_run_9.lammpstrj")
@@ -63,4 +63,4 @@ print(get_distance(scale_to_box(trj.s2[774][115, 2:], trj.box_size[774], is_1d=T
                    mode="pbc"))
 '''
 
-plot_HB_timeseries(indices, trj.s2)
+#plot_HB_timeseries(indices, trj.s2)

@@ -665,7 +665,8 @@ class Trajectory:
         Method to calculate the radial distribution function for a single trajectory. either one frame or average over the
         entire trajectory. Based on the binning of distances.
         :param snapshot: Time index incase of single frame
-        :param gr_type: type of the rdf can be "OO", "HH" or "OH"
+        :param gr_type: type of the rdf can be "OO", "HH" or "OH" in single frame with the addition of "OH_ion"
+                and "H3O_ion" available only for full trajectories
         :param n_bins: number of bins
         :param start: starting distance default =0.01
         :param stop: end distance defaults to the min(box size)/2
@@ -808,7 +809,7 @@ class Trajectory:
             '''
             helper function to find the coordinates of the displaced H Atom by finding the midpoint between the
             Bondingatoms of the reference O atom and then mirroring this point in space, while making sure the distance
-            between the displaced H and the reference O is smaler then the distance fo the O to its closest bonding H
+            between the displaced H and the reference O is smaller then the distance fo the O to its closest bonding H
             '''
 
             minimum_distance = np.min([get_distance(H_pair[0], reference_O), get_distance(H_pair[1], reference_O)])
@@ -1144,9 +1145,9 @@ class Trajectory:
                             s1=self.s1, s2=self.s2)
         return None
 
-    def get_radial_diffusion(self, timestep: int = 0.0005) -> np.ndarray:
+    def get_rotational_diffusion(self, timestep: int = 0.0005) -> np.ndarray:
         '''
-        method to calculate the radial diffusion coefficient based on 10.1103/PhysRevE.76.031203
+        method to calculate the rotational diffusion coefficient based on 10.1103/PhysRevE.76.031203
         currently only supports non ionic water without hydrogen exchange.
         :param dt: timestep used for integration, default=5*10e-4.
 
