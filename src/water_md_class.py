@@ -352,7 +352,7 @@ class Trajectory:
                 the euclidean distance
         '''
 
-        # workaround to set instance atributes as default argument
+        # workaround to set instance attributes as default argument
         if species_1 is None:
             species_1 = self.s1
         if species_2 is None:
@@ -374,7 +374,7 @@ class Trajectory:
 
         except (AttributeError, TypeError) as error:
             if self.verbosity == "loud":
-                print(f"Atribute Error occured(recieved list instead of numpy array) using {snapshot} element of the list")
+                print(f"Attribute Error occurred(received list instead of numpy array) using {snapshot} element of the list")
             species_1 = species_1[snapshot]
             species_2 = species_2[snapshot]
 
@@ -757,7 +757,7 @@ class Trajectory:
                 rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
                 return rdf_list, r
 
-
+    # todo: move to md_class_graphs
     def plot_water_hist(self, index_list: np.ndarray = None) -> None:
         '''
         Quick Wraperfunction for pyplot to draw a histogram of H-Bond distribution

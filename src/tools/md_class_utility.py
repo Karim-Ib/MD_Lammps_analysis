@@ -1,14 +1,9 @@
 import numpy as np
 import pandas as pd
 import os
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
-from matplotlib.widgets import Slider
 from typing import List
-
 from src.water_md_class import Trajectory
 from src.tools.md_class_functions import get_distance, scale_to_box
-
 
 
 def cut_multiple_snaps(trajectory_obj: Trajectory, folder_output: str, snapshot_list: list) -> None:
@@ -52,7 +47,6 @@ def generate_md_input(folder_input: str, folder_output: str, N_traj: int=1, form
         traj_temp.indexlist, _ = traj_temp.get_neighbour_KDT(mode="pbc", snapshot=0)
         traj_temp.get_displace(snapshot=0, id=None, distance=random_displace_distance[i], eps=0.05,
                                path=folder_output+f"{i}_")
-
 
 
 def save_HB_for_ovito(trj: Trajectory, HB_oxygen_ids: [], ts: int=10, path: str="") -> None:
@@ -133,6 +127,7 @@ def get_averaged_rdf() -> np.ndarray:
     :return:
     '''
     return None
+
 
 def get_HB_timeseries(trj: Trajectory, cutoff: float=2.9) -> []:
     '''
@@ -263,26 +258,23 @@ def get_all_wires(trj: Trajectory, cut_off: float=2.9) -> (List[tuple], List[Lis
     wire_length = []
     hb_bonds = []
 
-
-    for ind, ts in enumerate(range(trj.recombination_time)):
+    for ts in range(trj.recombination_time):
         h3o_bonds, h3o_oxygen, ions = trj.get_hydrogen_bonds(timestep=ts, cutoff=cut_off, starting_oh=False)
         if h3o_bonds:
             reduced_bonds = remove_mirror_duplicates(h3o_bonds)
             temp = [*reduced_bonds]
             temp = list(sum(temp, ()))
 
-            if ions[0] in temp and ions[1] in temp:
+            if (ions[0] in temp) and (ions[1] in temp):
                 h3o_wire = get_hb_wire(reduced_bonds, ions[0])
-
-            else:
-                h3o_wire = None
-
-            if h3o_wire is not None:
                 wire_length.append((len(h3o_wire), ts))
                 hb_bonds.append(h3o_wire)
             else:
                 wire_length.append((0, ts))
                 hb_bonds.append([None])
+        else:
+            wire_length.append((0, ts))
+            hb_bonds.append([None])
 
     return wire_length, hb_bonds
 
@@ -316,7 +308,17 @@ def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [flo
     return distances
 
 
+def unwrap_pbc(positions: np.ndarray, box_dim: list[int] = [1, 1, 1, 1, 1]) -> np.ndarray:
+    '''
+    Function to unwrap PBC for plotting
+    :param position:
+    :param box_dim:
+    :return:
+    '''
+    unwrapped = positions.copy()
+    deltas = np.diff(positions, axis=0)  # Compute frame-to-frame deltas
+    shifts = np.round(deltas / box_dim)  # Compute box crossings
+    corrections = np.cumsum(shifts, axis=0) * box_dim  # Compute cumulative shifts
+    unwrapped[1:] += corrections  # Apply corrections to all but the first frame
 
-
-
-
+    return unwrapped

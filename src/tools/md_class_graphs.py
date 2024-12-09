@@ -1,8 +1,10 @@
-from md_class_utility import *
+from src.tools.md_class_utility import *
 from src.water_md_class import *
 import numpy as np
 import matplotlib.pyplot as plt
-
+import matplotlib.ticker as mtick
+from matplotlib.widgets import Slider
+import matplotlib.patches as mpatches
 
 def plot_d_rot(rmsd: np.ndarray, timestep: float=0.0005) -> None:
     '''
@@ -170,7 +172,7 @@ def plot_hbond_network(oh_bonds: [], h3_bonds: [], trj: [], ions: (int, int)) ->
     return None
 
 
-def plot_HB_timeseries(HB_timeseries: [tuple], trj: [], plot_oxygen=False) -> None:
+def plot_HB_network(HB_timeseries: [tuple], trj: [], plot_oxygen=False) -> None:
     '''
     Function to plot the hydrogen bond data for the entire series. Will result in an interactive plot with a slider
     to move thru the timesteps
@@ -303,13 +305,13 @@ def plot_HB_ratio(HB_timeseries: [tuple], n_atoms: int, apply_smoothing: bool=Fa
     return None
 
 
-# TODO: fix function logic
-def plot_HB_wire(wire_index: [tuple], wire_ts: [int], trj: Trajectory) -> None:
+def plot_HB_wire(wire_list: [[int]], trj: Trajectory, plot_hydrogens: bool=False) -> None:
     '''
     Function to plot the HB wire from the H3O+ towards the OH- ion for a given wire.
-    :param wire_index: tuple of ints denoting the O-Atoms of the Molecules involved
-    :param wire_tx: Timesteps at which the Wire exsited
+    :param wire_list: list of list of ints denoting the O-Atoms of the Molecules involved. one entry for each timestep
+    till the recombination time reach. can contain None if no direct wire exists
     :param trj: Corresponding Trajectory Object
+    :param plot_hydrogens: Boolean default=False, denotes if only oxygens are plotted for molecule representation
     :return:
     '''
 
@@ -318,51 +320,63 @@ def plot_HB_wire(wire_index: [tuple], wire_ts: [int], trj: Trajectory) -> None:
     ax_plot = fig.add_axes([0, 0, 1, 0.8], projection="3d")
     ax_slider = fig.add_axes([0.1, 0.85, 0.8, 0.1])
 
-    s = Slider(ax=ax_slider, label="Timestep", valmin=0, valmax=len(wire_ts)-1, valinit=0, valfmt="%i")
+    s = Slider(ax=ax_slider, label="Timestep", valmin=0, valmax=len(wire_list)-1, valinit=0, valfmt="%i")
 
     def update(val):
         value = int(s.val)
         ax_plot.cla()
+        ax_plot.set_title("Hydrogen Wire between H3O and OH")
 
-        oh_ordered = []
-        h3_ordered = []
 
-        if len(HB_timeseries[value][0]) != 0:
-            for bond in HB_timeseries[value][0]:
-                temp = sorted(bond)
-                if temp not in oh_ordered:
-                    oh_ordered.append(temp)
-            for oh_bond in oh_ordered:
-                ax_plot.plot([trj[value][oh_bond[0], 2], trj[value][oh_bond[1], 2]],
-                             [trj[value][oh_bond[0], 3], trj[value][oh_bond[1], 3]],
-                             [trj[value][oh_bond[0], 4], trj[value][oh_bond[1], 4]],
-                             c="blue", linewidth=4.0, linestyle='dashed')
+
+        if wire_list[value][0] is not None:
+            for id in range(len(wire_list[value]) -1):
+                ax_plot.plot([trj.s2[value][wire_list[value][id], 2], trj.s2[value][wire_list[value][id + 1], 2]],
+                 [trj.s2[value][wire_list[value][id], 3], trj.s2[value][wire_list[value][id + 1], 3]],
+                 [trj.s2[value][wire_list[value][id], 4], trj.s2[value][wire_list[value][id + 1], 4]],
+                 c="purple", linewidth=2.0, linestyle='dashed')
+            ax_plot.scatter(trj.s2[value][wire_list[value][0], 2],trj.s2[value][wire_list[value][0], 3],
+                            trj.s2[value][wire_list[value][0], 4], marker="o", s=220, c="red", label="H3O-Ion")
+            ax_plot.scatter(trj.s2[value][wire_list[value][-1], 2],trj.s2[value][wire_list[value][-1], 3],
+                            trj.s2[value][wire_list[value][-1], 4], marker="o", s=220, c="blue", label="OH-Ion")
+
+
+            for bond in wire_list[value][1:-1]:
+                ax_plot.scatter(trj.s2[value][bond, 2],trj.s2[value][bond, 3],
+                                trj.s2[value][bond, 4], marker="o", s=220, c="magenta", label="HB Oxygen")
+
+            if plot_hydrogens:
+                indexlist_group, _ = trj.get_neighbour_KDT(mode="pbc", snapshot=value)
+
+                for mol in wire_list[value]:
+                    temp = np.append(np.argwhere(indexlist_group == mol), mol)
+                    print(temp)
+                    for H in temp[:-1]:
+                        ax_plot.scatter(trj.s1[value][H, 2],trj.s1[value][H, 3],
+                                        trj.s1[value][H, 4], marker="o", s=50, c="orange", label="HB Hydrogen")
+
         else:
-            oh_ordered.append(HB_timeseries[value][2][0])
-
-        if len(HB_timeseries[value][1]) != 0:
-            for bond in HB_timeseries[value][1]:
-                temp = sorted(bond)
-                if temp not in h3_ordered:
-                    h3_ordered.append(temp)
-            for h3_bond in h3_ordered:
-                ax_plot.plot([trj[value][h3_bond[0], 2], trj[value][h3_bond[1], 2]],
-                             [trj[value][h3_bond[0], 3], trj[value][h3_bond[1], 3]],
-                             [trj[value][h3_bond[0], 4], trj[value][h3_bond[1], 4]],
-                             c="orange", linewidth=4.0, linestyle='dotted')
-            else:
-                h3_ordered.append(HB_timeseries[value][2][1])
-
-        ax_plot.scatter(trj[value][HB_timeseries[value][2][0], 2], trj[value][HB_timeseries[value][2][0], 3],
-                        trj[value][HB_timeseries[value][2][0], 4], marker="o", s=50, c="green", label="OH-Ion")
-        ax_plot.scatter(trj[value][HB_timeseries[value][2][1], 2], trj[value][HB_timeseries[value][2][1], 3],
-                        trj[value][HB_timeseries[value][2][1], 4],marker="x", s=50, c="red", label="H3O-Ion")
-        ax_plot.set_title("Hydrogenbond Network")
+            pass
 
     s.on_changed(update)
     update(0)
-    plt.legend()
-    plt.show()
+    if plot_hydrogens:
+        legend_items = [
+            mpatches.Patch(color='red', label='H3O-Ion'),
+            mpatches.Patch(color='blue', label='OH-Ion'),
+            mpatches.Patch(color='magenta', label='HB Oxygen'),
+            mpatches.Patch(color='orange', label='HB Hydrogen'),
+            mpatches.Patch(color='purple', label='HB-Wire')
+        ]
+    else:
+        legend_items = [
+            mpatches.Patch(color='red', label='H3O-Ion'),
+            mpatches.Patch(color='blue', label='OH-Ion'),
+            mpatches.Patch(color='magenta', label='HB Oxygen'),
+            mpatches.Patch(color='purple', label='HB-Wire')
+        ]
 
+    fig.legend(handles=legend_items, loc="lower right")
+    plt.show()
 
     return None
