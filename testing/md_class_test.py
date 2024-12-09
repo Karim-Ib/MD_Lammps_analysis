@@ -9,13 +9,14 @@ trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)
 bonds_h3, oxygens_h3, ion_ids_h3 = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=False)
 bonds_oh, oxygens_oh, ion_ids_oh = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=True)
 
-last_wire, indices = get_last_wire(trj)
-
-HB_dist = get_HB_wire_distance(indices, trj, last_wire)
-print(indices)
-print(last_wire)
-print(HB_dist)
-
+#last_wire, indices = get_last_wire(trj)
+all_wire, all_bonds = get_all_wires(trj)
+#HB_dist = get_HB_wire_distance(indices, trj, last_wire)
+#print(indices)
+#print(last_wire)
+#print(HB_dist)
+print(all_wire)
+print(all_bonds)
 #plot_HB_timeseries(get_HB_timeseries(trj), trj.s2, plot_oxygen=True)
 #plot_HB_ratio(get_HB_timeseries(trj), trj.n_atoms, apply_smoothing=True, window=15)
 

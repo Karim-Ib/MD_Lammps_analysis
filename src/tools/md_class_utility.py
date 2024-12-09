@@ -9,27 +9,6 @@ from typing import List
 from src.water_md_class import Trajectory
 from src.tools.md_class_functions import get_distance, scale_to_box
 
-def plot_d_rot(rmsd: np.ndarray, timestep: float=0.0005) -> None:
-    '''
-    function to plot the rotational diffusion coefficient
-    :param rmsd: np array of the rmsd
-    :param timestep: resolution
-    :return:
-    '''
-    fig, ax = plt.subplots()
-
-    ax.scatter(timestep*np.linspace(0,len(rmsd), len(rmsd)), rmsd, color="red", marker="x")
-    ax.plot(timestep*np.linspace(0,len(rmsd), len(rmsd)), rmsd)
-    ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
-    ax.xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
-    ax.set_xlabel("$\Delta$t in ps")
-    ax.grid()
-    ax.set_ylabel("<$\phi^2(\Delta t)$>")
-    ax.set_title("Rotational Diffusion")
-
-    plt.show()
-
-    return None
 
 
 def cut_multiple_snaps(trajectory_obj: Trajectory, folder_output: str, snapshot_list: list) -> None:
@@ -74,145 +53,6 @@ def generate_md_input(folder_input: str, folder_output: str, N_traj: int=1, form
         traj_temp.get_displace(snapshot=0, id=None, distance=random_displace_distance[i], eps=0.05,
                                path=folder_output+f"{i}_")
 
-def plot_MSD(msd: np.ndarray, timestep: float=0.0005) -> None:
-    '''
-    Function to plot the mean-squared displacement.
-    :param msd: array containing msd data
-    :param timestep: timesteps used in simulation
-    :return:
-    '''
-    fig, ax = plt.subplots()
-
-    ax.scatter(timestep*np.linspace(0,len(msd), len(msd)), msd, color="red", marker="x")
-    ax.plot(timestep*np.linspace(0,len(msd), len(msd)), msd)
-    ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
-    ax.xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
-    ax.set_xlabel("$\Delta$t in ps")
-    ax.grid()
-    ax.set_ylabel("<$r^2$>")
-    ax.set_title("Mean square displacement")
-
-    plt.show()
-
-    return None
-
-
-def plot_ion_speed(oh: np.ndarray, h3o: np.ndarray, dt: float=0.0005) -> None:
-    '''
-    Function to calculate the speed of the ions at each timestep
-    :param oh: array containing OH ion coordinates
-    :param h3o: array containing H3O ion coordinates
-    :param dt: timestep used in simulation
-    :return:
-    '''
-    fig, ax = plt.subplots()
-
-    ax.plot(dt*np.linspace(0,len(oh), len(oh)), oh, color="blue", label="OH")
-    ax.plot(dt*np.linspace(0,len(h3o), len(h3o)), h3o, color="orange", label="H3O")
-    ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
-    ax.xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
-    plt.legend()
-    ax.set_xlabel("$\Delta$t in ps")
-    ax.grid()
-    ax.set_ylabel("<$|(v(t)|$>")
-    ax.set_title("Speed of H3O and OH ions at each time")
-
-    plt.show()
-
-    return None
-
-
-def plot_rdf(gr: np.ndarray, r: np.ndarray, type: str="OO") -> None:
-    '''
-    Function to plot the radial distribution function
-    :param gr: array containing the rdf
-    :param r: array containing the radii
-    :param type: type of the RDF used for labels
-    :return:
-    '''
-    fig, ax = plt.subplots()
-
-    ax.plot(r, gr, color="blue", label="g(r)")
-    #ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
-    #ax.xaxis.set_major_formatter(mtick.FormatStrFormatter('%.1e'))
-    plt.legend()
-    ax.set_xlabel(r'r in Å')
-    ax.grid()
-    ax.set_ylabel(f"{type}-g(r)")
-    ax.set_title(f"{type} Radial distribution function")
-
-    plt.show()
-
-    return None
-
-
-def plot_hbonds_single(bonds: [tuple], trj: [list], start: str="OH") -> None:
-    '''
-    Function to plot the hydrogen bonds at a single timestep
-    :param bonds: list of tuples containing the bonding pairs i.e [(1, 5), (5, 7)..]
-    :param trj: trajectory of the oxygen atoms
-    :param start: string, if the hbond network started from either OH or H3O ion
-    :return:
-    '''
-    ordered_pairs = []
-
-    for bond in bonds:
-        temp = sorted(bond)
-        if temp not in ordered_pairs:
-            ordered_pairs.append(sorted(bond))
-
-    ax = plt.axes(projection="3d")
-    for pair in ordered_pairs:
-       ax.plot([trj[pair[0], 2], trj[pair[1], 2]], [trj[pair[0], 3], trj[pair[1], 3]],
-               [trj[pair[0], 4], trj[pair[1], 4]])
-    ax.scatter(trj[bonds[0][0], 2], trj[bonds[0][0], 3], trj[bonds[0][0], 4], marker="x", s=20, c="black", label=start)
-    plt.legend()
-    plt.show()
-    return None
-
-
-def plot_hbond_network(oh_bonds: [], h3_bonds: [], trj: [], ions: (int, int)) -> None:
-    '''
-    Function to plot the hydrogen bond network of both ions at a single time frame
-    :param oh_bonds: list of tuples containing oh bonds
-    :param h3_bonds: list of tuples containing h3o bonds
-    :param trj: coodrinates of oxygen atoms
-    :param ions: ids of the ions (oh ion id, h3o ion id)
-    :return:
-    '''
-    oh_ordered = []
-    h3_ordered = []
-
-    ax = plt.axes(projection="3d")
-    if len(oh_bonds) != 0:
-        for bond in oh_bonds:
-            temp = sorted(bond)
-            if temp not in oh_ordered:
-                oh_ordered.append(temp)
-        for oh_bond in oh_ordered:
-            ax.plot([trj[oh_bond[0], 2], trj[oh_bond[1], 2]], [trj[oh_bond[0], 3], trj[oh_bond[1], 3]],
-                    [trj[oh_bond[0], 4], trj[oh_bond[1], 4]], c="blue")
-    else:
-        oh_ordered.append(ions[0])
-
-    if len(h3_bonds) != 0:
-        for bond in h3_bonds:
-            temp = sorted(bond)
-            if temp not in h3_ordered:
-                h3_ordered.append(temp)
-        for h3_bond in h3_ordered:
-            ax.plot([trj[h3_bond[0], 2], trj[h3_bond[1], 2]], [trj[h3_bond[0], 3], trj[h3_bond[1], 3]],
-                    [trj[h3_bond[0], 4], trj[h3_bond[1], 4]], c="yellow")
-    else:
-        h3_ordered.append(ions[1])
-
-    ax.scatter(trj[ions[0], 2], trj[ions[0], 3], trj[ions[0], 4],
-               marker="o", s=20, c="green", label="OH-Ion")
-    ax.scatter(trj[ions[1], 2], trj[ions[1], 3], trj[ions[1], 4],
-               marker="x", s=20, c="orange", label="H3O-Ion")
-    plt.legend()
-    plt.show()
-    return None
 
 
 def save_HB_for_ovito(trj: Trajectory, HB_oxygen_ids: [], ts: int=10, path: str="") -> None:
@@ -312,140 +152,6 @@ def get_HB_timeseries(trj: Trajectory, cutoff: float=2.9) -> []:
     return HB_timeseries
 
 
-def plot_HB_timeseries(HB_timeseries: [tuple], trj: [], plot_oxygen=False) -> None:
-    '''
-    Function to plot the hydrogen bond data for the entire series. Will result in an interactive plot with a slider
-    to move thru the timesteps
-    :param HB_timeseries: hydrogen bond timeseries generated by get_HB_timeseries
-    :param trj: Trajectory.s2 data
-    :param plot_oxygen: Boolean, if set to true will add the oxygen atoms of each H2O ontop of the bonding indicators
-    :return:
-    '''
-    fig = plt.figure()
-    ax_plot = fig.add_axes([0, 0, 1, 0.8], projection="3d")
-    ax_slider = fig.add_axes([0.1, 0.85, 0.8, 0.1])
-
-    s = Slider(ax=ax_slider, label="Timestep", valmin=0, valmax=len(HB_timeseries)-1, valinit=0, valfmt="%i")
-
-    def update(val):
-        value = int(s.val)
-        ax_plot.cla()
-
-        oh_ordered = []
-        h3_ordered = []
-
-        if len(HB_timeseries[value][0]) != 0:
-            for bond in HB_timeseries[value][0]:
-                temp = sorted(bond)
-                if temp not in oh_ordered:
-                    oh_ordered.append(temp)
-            for oh_bond in oh_ordered:
-                ax_plot.plot([trj[value][oh_bond[0], 2], trj[value][oh_bond[1], 2]],
-                             [trj[value][oh_bond[0], 3], trj[value][oh_bond[1], 3]],
-                             [trj[value][oh_bond[0], 4], trj[value][oh_bond[1], 4]],
-                             c="blue", linewidth=2.0, linestyle='dashed')
-                if plot_oxygen:
-                    ax_plot.scatter([trj[value][oh_bond[0], 2], trj[value][oh_bond[1], 2]],
-                                     [trj[value][oh_bond[0], 3], trj[value][oh_bond[1], 3]],
-                                     [trj[value][oh_bond[0], 4], trj[value][oh_bond[1], 4]],
-                                     c="purple",marker="*", s=40, label="O-Atom")
-        else:
-            oh_ordered.append(HB_timeseries[value][2][0])
-
-        if len(HB_timeseries[value][1]) != 0:
-            for bond in HB_timeseries[value][1]:
-                temp = sorted(bond)
-                if temp not in h3_ordered:
-                    h3_ordered.append(temp)
-            for h3_bond in h3_ordered:
-                ax_plot.plot([trj[value][h3_bond[0], 2], trj[value][h3_bond[1], 2]],
-                             [trj[value][h3_bond[0], 3], trj[value][h3_bond[1], 3]],
-                             [trj[value][h3_bond[0], 4], trj[value][h3_bond[1], 4]],
-                             c="orange", linewidth=2.0, linestyle='dotted')
-                if plot_oxygen:
-                    ax_plot.scatter([trj[value][h3_bond[0], 2], trj[value][h3_bond[1], 2]],
-                                    [trj[value][h3_bond[0], 3], trj[value][h3_bond[1], 3]],
-                                    [trj[value][h3_bond[0], 4], trj[value][h3_bond[1], 4]],
-                                    c="purple",marker="*", s=40, label="O-Atom")
-            else:
-                h3_ordered.append(HB_timeseries[value][2][1])
-
-        ax_plot.scatter(trj[value][HB_timeseries[value][2][0], 2], trj[value][HB_timeseries[value][2][0], 3],
-                        trj[value][HB_timeseries[value][2][0], 4], marker="h", s=50, c="blue", label="OH-Ion")
-        ax_plot.scatter(trj[value][HB_timeseries[value][2][1], 2], trj[value][HB_timeseries[value][2][1], 3],
-                        trj[value][HB_timeseries[value][2][1], 4],marker="s", s=50, c="orange", label="H3O-Ion")
-        ax_plot.set_title("Hydrogenbond Network")
-
-    ### workaround to avoid multiple legend entries for the scattered O-Atoms -> dummy plot
-    #if plot_oxygen:
-    #    ax_plot.plot([0], [0], [0], linestyle="none",  marker='*', color='purple', label="O-Atom")
-
-    s.on_changed(update)
-    update(0)
-    handles, labels = ax_plot.get_legend_handles_labels()
-    unique = [(h, l) for i, (h, l) in enumerate(zip(handles, labels)) if l not in labels[:i]]
-    fig.legend(*zip(*unique), loc="lower left")
-    plt.show()
-
-
-    return None
-
-
-def plot_HB_ratio(HB_timeseries: [tuple], n_atoms: int, apply_smoothing: bool=False, window: int=5) -> None:
-    '''
-    Function to plot the HB ratio with option to included a smoothed graph. Smoothing is done by applying
-    a Hull Moving Average on the data. (cant find original paper will cite a paper that mentions it
-     https://doi.org/10.1504/IJMDM.2022.119582)
-    :param HB_timeseries: HB_timeseries for whole trajectory
-    :param n_atoms: number of atoms i.e from Trajectory.n_atoms
-    :param apply_smoothing: boolean default False, determines if smoothing is applied
-    :param window: if smoothing is applied sets the window of the moving averege. default =5
-    :return:
-    '''
-
-    o_atoms = int(n_atoms / 3)
-    steps = len(HB_timeseries)
-    oh_hb_counter = np.empty(steps)
-    h3_hb_counter = np.empty(steps)
-
-    for id, item in enumerate(HB_timeseries):
-        oh_hb_counter[id] = len(item[0])
-        h3_hb_counter[id] = len(item[1])
-
-    oh_ratio = oh_hb_counter / o_atoms
-    h3_ratio = h3_hb_counter / o_atoms
-
-    time_axis = np.linspace(0, steps, steps)
-
-    fig, ax = plt.subplots()
-
-    ax.plot(time_axis, oh_ratio, c="lightblue", label="OH-Bonds")
-    ax.plot(time_axis, h3_ratio, c="orange", label="H3O-Bonds")
-    if apply_smoothing:
-        oh_ratio_smooth = calculate_hma(oh_ratio, window)
-        h3_ratio_smooth = calculate_hma(h3_ratio, window)
-        ax.plot(time_axis, oh_ratio_smooth, c="green", label="HMA OH", linestyle='dashed', linewidth=3.0)
-        ax.plot(time_axis, h3_ratio_smooth, c="red", label="HMA H3O", linestyle='dashed', linewidth=3.0)
-    ax.set_xlabel("Timestep")
-    ax.set_ylabel("Ratio of count(HB)/num(Oxygen)")
-    ax.set_title("Ratio of the Ion-HB Networks, normalized by number of O Atoms")
-    plt.legend()
-    plt.show()
-
-    fig, ax = plt.subplots()
-    ax.plot(time_axis, oh_hb_counter+h3_hb_counter, c="blue", label="HB-Bonds")
-    if apply_smoothing:
-        smoothed_counter = calculate_hma(oh_hb_counter+h3_hb_counter, window)
-        ax.plot(time_axis, smoothed_counter, c="green", label="HMA Bonds", linestyle="dashed", linewidth=3.0)
-    ax.set_xlabel("Timestep")
-    ax.set_ylabel("Number of HB")
-    ax.set_title("Total number of Ion HB per Timestep")
-    plt.legend()
-    plt.show()
-
-    return None
-
-
 def calculate_hma(data: np.ndarray, _window: int=5) -> np.ndarray:
     '''
     Implementation of the Hull Movingaverage smoothing function
@@ -499,8 +205,10 @@ def get_hb_wire(bonds, target):
             return path[::-1]  # Reverse the path to get root to target
         if node in adjacency_list:
             for child in adjacency_list[node]:
-                queue.append((node, child))
-                visited[child] = node  # Update visited dictionary with child and its parent
+                if child not in visited:
+                    queue.append((node, child))
+                    visited[child] = node  # Update visited dictionary with child and its parent
+    return None
 
 
 def remove_mirror_duplicates(tuple_list: [tuple]) -> [tuple]:
@@ -544,6 +252,41 @@ def get_last_wire(trj: Trajectory) -> (List[int], List[tuple]):
             return wire_ts, wire_inds
 
 
+def get_all_wires(trj: Trajectory, cut_off: float=2.9) -> (List[tuple], List[List[int]]):
+    '''
+    Function to get the length and HB-Bonds of each direct wire connecting the ions from H3O->Oh
+    :param trj: Trajectory Object
+    :param cut_off: Float default=2.9 cutoff distance for hydrogen bond calculation
+    :return: Returns two objects (list of (wire-length, timestep) and list of bondding molecules)
+    '''
+
+    wire_length = []
+    hb_bonds = []
+
+
+    for ind, ts in enumerate(range(trj.recombination_time)):
+        h3o_bonds, h3o_oxygen, ions = trj.get_hydrogen_bonds(timestep=ts, cutoff=cut_off, starting_oh=False)
+        if h3o_bonds:
+            reduced_bonds = remove_mirror_duplicates(h3o_bonds)
+            temp = [*reduced_bonds]
+            temp = list(sum(temp, ()))
+
+            if ions[0] in temp and ions[1] in temp:
+                h3o_wire = get_hb_wire(reduced_bonds, ions[0])
+
+            else:
+                h3o_wire = None
+
+            if h3o_wire is not None:
+                wire_length.append((len(h3o_wire), ts))
+                hb_bonds.append(h3o_wire)
+            else:
+                wire_length.append((0, ts))
+                hb_bonds.append([None])
+
+    return wire_length, hb_bonds
+
+
 def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [float]:
     '''
     Function to calculate the average molecules (O-O) distance in a Hydrogen-Bond wire
@@ -572,66 +315,8 @@ def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [flo
 
     return distances
 
-#TODO: fix function logic
-def plot_HB_wire(wire_index: [tuple], wire_ts: [int], trj: Trajectory) -> None:
-    '''
-    Function to plot the HB wire from the H3O+ towards the OH- ion for a given wire.
-    :param wire_index: tuple of ints denoting the O-Atoms of the Molecules involved
-    :param wire_tx: Timesteps at which the Wire exsited
-    :param trj: Corresponding Trajectory Object
-    :return:
-    '''
 
 
-    fig = plt.figure()
-    ax_plot = fig.add_axes([0, 0, 1, 0.8], projection="3d")
-    ax_slider = fig.add_axes([0.1, 0.85, 0.8, 0.1])
-
-    s = Slider(ax=ax_slider, label="Timestep", valmin=0, valmax=len(wire_ts)-1, valinit=0, valfmt="%i")
-
-    def update(val):
-        value = int(s.val)
-        ax_plot.cla()
-
-        oh_ordered = []
-        h3_ordered = []
-
-        if len(HB_timeseries[value][0]) != 0:
-            for bond in HB_timeseries[value][0]:
-                temp = sorted(bond)
-                if temp not in oh_ordered:
-                    oh_ordered.append(temp)
-            for oh_bond in oh_ordered:
-                ax_plot.plot([trj[value][oh_bond[0], 2], trj[value][oh_bond[1], 2]],
-                             [trj[value][oh_bond[0], 3], trj[value][oh_bond[1], 3]],
-                             [trj[value][oh_bond[0], 4], trj[value][oh_bond[1], 4]],
-                             c="blue", linewidth=4.0, linestyle='dashed')
-        else:
-            oh_ordered.append(HB_timeseries[value][2][0])
-
-        if len(HB_timeseries[value][1]) != 0:
-            for bond in HB_timeseries[value][1]:
-                temp = sorted(bond)
-                if temp not in h3_ordered:
-                    h3_ordered.append(temp)
-            for h3_bond in h3_ordered:
-                ax_plot.plot([trj[value][h3_bond[0], 2], trj[value][h3_bond[1], 2]],
-                             [trj[value][h3_bond[0], 3], trj[value][h3_bond[1], 3]],
-                             [trj[value][h3_bond[0], 4], trj[value][h3_bond[1], 4]],
-                             c="orange", linewidth=4.0, linestyle='dotted')
-            else:
-                h3_ordered.append(HB_timeseries[value][2][1])
-
-        ax_plot.scatter(trj[value][HB_timeseries[value][2][0], 2], trj[value][HB_timeseries[value][2][0], 3],
-                        trj[value][HB_timeseries[value][2][0], 4], marker="o", s=50, c="green", label="OH-Ion")
-        ax_plot.scatter(trj[value][HB_timeseries[value][2][1], 2], trj[value][HB_timeseries[value][2][1], 3],
-                        trj[value][HB_timeseries[value][2][1], 4],marker="x", s=50, c="red", label="H3O-Ion")
-        ax_plot.set_title("Hydrogenbond Network")
-
-    s.on_changed(update)
-    update(0)
-    plt.legend()
-    plt.show()
 
 
-    return None
+
