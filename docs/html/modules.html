@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>MD_Lammps_analysis_class &#8212; MD_Lammps_analysis_class  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="md-lammps-analysis-class">
+<h1>MD_Lammps_analysis_class<a class="headerlink" href="#md-lammps-analysis-class" title="Link to this heading">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="src.html">src package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="src.html#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="src.tools.html">src.tools package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="src.tools.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.tools.html#module-src.tools.md_class_functions">src.tools.md_class_functions module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.tools.html#module-src.tools.md_class_graphs">src.tools.md_class_graphs module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.tools.html#module-src.tools.md_class_utility">src.tools.md_class_utility module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.tools.html#module-src.tools">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="src.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="src.html#module-src.water_md_class">src.water_md_class module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="src.html#src.water_md_class.Trajectory"><code class="docutils literal notranslate"><span class="pre">Trajectory</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.cut_snapshot"><code class="docutils literal notranslate"><span class="pre">Trajectory.cut_snapshot()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_MSD"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_MSD()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_displace"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_displace()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_hydrogen_bonds"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_hydrogen_bonds()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_ion_distance"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_ion_distance()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_ion_speed"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_ion_speed()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_neighbour_KDT"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_neighbour_KDT()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_neighbour_naive"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_neighbour_naive()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_rdf"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_rdf()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_rdf_rdfpy"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_rdf_rdfpy()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_rdf_rdist"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_rdf_rdist()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_recombination_time"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_recombination_time()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_rotational_diffusion"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_rotational_diffusion()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_split_species"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_split_species()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.get_translational_diffusion"><code class="docutils literal notranslate"><span class="pre">Trajectory.get_translational_diffusion()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.gromacs_to_np"><code class="docutils literal notranslate"><span class="pre">Trajectory.gromacs_to_np()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.group_molecules"><code class="docutils literal notranslate"><span class="pre">Trajectory.group_molecules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.lammps_data_to_np"><code class="docutils literal notranslate"><span class="pre">Trajectory.lammps_data_to_np()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.lammpstrj_to_np"><code class="docutils literal notranslate"><span class="pre">Trajectory.lammpstrj_to_np()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.plot_water_hist"><code class="docutils literal notranslate"><span class="pre">Trajectory.plot_water_hist()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.remove_atoms"><code class="docutils literal notranslate"><span class="pre">Trajectory.remove_atoms()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.set_box_size"><code class="docutils literal notranslate"><span class="pre">Trajectory.set_box_size()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.set_scale_to_lammps"><code class="docutils literal notranslate"><span class="pre">Trajectory.set_scale_to_lammps()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="src.html#src.water_md_class.Trajectory.xdatcar_to_np"><code class="docutils literal notranslate"><span class="pre">Trajectory.xdatcar_to_np()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="src.html#module-src">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">MD_Lammps_analysis_class</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, Karim-Leon Ibrahim.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/modules.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

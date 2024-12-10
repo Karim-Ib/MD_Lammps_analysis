@@ -1,0 +1,29 @@
+src package
+===========
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   src.tools
+
+Submodules
+----------
+
+src.water\_md\_class module
+---------------------------
+
+.. automodule:: src.water_md_class
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: src
+   :members:
+   :undoc-members:
+   :show-inheritance:

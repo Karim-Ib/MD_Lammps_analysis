@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>src.tools package &#8212; MD_Lammps_analysis_class  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=12dfc556" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="src-tools-package">
+<h1>src.tools package<a class="headerlink" href="#src-tools-package" title="Link to this heading">¶</a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
+</section>
+<section id="module-src.tools.md_class_functions">
+<span id="src-tools-md-class-functions-module"></span><h2>src.tools.md_class_functions module<a class="headerlink" href="#module-src.tools.md_class_functions" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.calc_rdf_rdist">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">calc_rdf_rdist</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">data:</span> <span class="pre">[&lt;class</span> <span class="pre">'numpy.ndarray'&gt;],</span> <span class="pre">box:</span> <span class="pre">[&lt;class</span> <span class="pre">'numpy.ndarray'&gt;],</span> <span class="pre">data_2:</span> <span class="pre">[&lt;class</span> <span class="pre">'numpy.ndarray'&gt;]</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">snapshot:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">0,</span> <span class="pre">n_bins:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">50,</span> <span class="pre">start:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.01,</span> <span class="pre">stop:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">ion:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False)</span> <span class="pre">-&gt;</span> <span class="pre">(&lt;class</span> <span class="pre">'numpy.ndarray'&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'numpy.ndarray'&gt;</span></em><span class="sig-paren">)</span><a class="headerlink" href="#src.tools.md_class_functions.calc_rdf_rdist" title="Link to this definition">¶</a></dt>
+<dd><p>Wraper to combine the rdf calculation process for the radius distance binning method.
+:param data: reference data to calculate rdf from
+:param box: box size
+:param data_2: optional 2nd set of data for pair correlation
+:param snapshot: index of the snapshot
+:param n_bins: number of bins
+:param start: start radius, default 0.01
+:param stop: end radius, defaults to min(box size)/2
+:param ion: bool, default false. Sets calculation mode for the rdf incase of ions
+:return: returns (gr, r)</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.calculate_rdf">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">calculate_rdf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data:</span> <span class="pre">~numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rho:</span> <span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tree:</span> <span class="pre">~scipy.spatial._ckdtree.cKDTree</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bins:</span> <span class="pre">~numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bin_v:</span> <span class="pre">~numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_cores:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">4)</span> <span class="pre">-&gt;</span> <span class="pre">(&lt;class</span> <span class="pre">'numpy.ndarray'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'numpy.ndarray'&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#src.tools.md_class_functions.calculate_rdf" title="Link to this definition">¶</a></dt>
+<dd><p>Function to calculate the rdf
+:param data: data to query from the tree
+:param rho: number density
+:param tree: periodic tree of neighbours
+:param bins: list of bins
+:param bin_v: volumes of the bin shells
+:param n_cores: number of cores for parallel usage, default 4
+:return: returns the g_r and bin list</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.check_hbond">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">check_hbond</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">traj_O:</span> <span class="pre">~numpy.ndarray,</span> <span class="pre">traj_H:</span> <span class="pre">~numpy.ndarray,</span> <span class="pre">current_mol:</span> <span class="pre">[&lt;class</span> <span class="pre">'int'&gt;],</span> <span class="pre">neighbour_mol:</span> <span class="pre">[&lt;class</span> <span class="pre">'int'&gt;],</span> <span class="pre">box:</span> <span class="pre">[],</span> <span class="pre">max_distance:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">3.0,</span> <span class="pre">min_angle:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">150</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.check_hbond" title="Link to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>Function to check the geometric hbond criterion as its used in mdanalysis:</dt><dd><p><a class="reference external" href="https://userguide.mdanalysis.org/stable/examples/analysis/hydrogen_bonds/hbonds.html">https://userguide.mdanalysis.org/stable/examples/analysis/hydrogen_bonds/hbonds.html</a></p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>traj_O</strong> – coordinates of the O atoms</p></li>
+<li><p><strong>traj_H</strong> – coordinates of the H atoms</p></li>
+<li><p><strong>current_mol</strong> – the current molecule from where we want to check the hbonding to neighbours</p></li>
+<li><p><strong>neighbour_mol</strong> – neighbouring molecules</p></li>
+<li><p><strong>box</strong> – box size</p></li>
+<li><p><strong>max_distance</strong> – maximal distance between two molecules O-Atom, defaults to 3A (empirical value)</p></li>
+<li><p><strong>min_angle</strong> – minimum angle between the Donor O, bonding Hydrogen and Acceptor O, defaults to 150°(empirical)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>returns a boolean whether the criterion is met or not.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.count_rdf_hist">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">count_rdf_hist</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">distances</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bins</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ion</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.count_rdf_hist" title="Link to this definition">¶</a></dt>
+<dd><p>Function to count the number of distances at each bin
+:param distances:array of all distance combinations
+:param bins: array of bin boundaries
+:return: array of the binned distances</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.get_all_distances">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">get_all_distances</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_1d</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.get_all_distances" title="Link to this definition">¶</a></dt>
+<dd><p>function to calculate distances, using pbc, for all pairs.
+:param data: reference coordinates to calculate distances from
+:param box: box size used for pbc
+:param data_2: optional 2nd set of data for pair correlations
+:param is_1d: boolean default=False, checks if the data array is 1D or not. used incase of ion scaling
+:return: array with all distance combinations</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.get_com">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">get_com</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">H_1:</span> <span class="pre">[&lt;class</span> <span class="pre">'numpy.ndarray'&gt;],</span> <span class="pre">H_2:</span> <span class="pre">[&lt;class</span> <span class="pre">'numpy.ndarray'&gt;],</span> <span class="pre">O:</span> <span class="pre">[&lt;class</span> <span class="pre">'numpy.ndarray'&gt;]</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.get_com" title="Link to this definition">¶</a></dt>
+<dd><p>helper function to quickly calculate the CoM of each H2O molecule based on the unit circle transform
+approach <a class="reference external" href="https://en.wikipedia.org/wiki/Center_of_mass#Systems_with_periodic_boundary_conditions">https://en.wikipedia.org/wiki/Center_of_mass#Systems_with_periodic_boundary_conditions</a></p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.get_com_dynamic">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">get_com_dynamic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">molecules</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H_pos</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">O_pos</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.get_com_dynamic" title="Link to this definition">¶</a></dt>
+<dd><p>helper function to calculate the center of mass of the water molecules. taks into account
+periodict boundary conditions and does calculation dynamically depending the molecule type
+(H2O, OH-, H3O+)
+:param molecules: list of atoms which represent a molecule
+:param trajectory:
+:param H_pos: array of hydrogen atom coordinates
+:param O_pos: array of oxygen atom coordinates
+:return: array of the com of all molecules</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.get_delta_phi_vector">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">get_delta_phi_vector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p_t</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.get_delta_phi_vector" title="Link to this definition">¶</a></dt>
+<dd><p>helper function to calculate the phi vector used for the rotational MSD calculation
+phi = p(t) x p(t+1) / (<a href="#id1"><span class="problematic" id="id2">|</span></a>p(t) x p(t+1) | * arccos(&lt;p(t), p(t+1)&gt;)) -&gt; normalized + scaled</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.get_distance">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">get_distance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">img</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'normal'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.get_distance" title="Link to this definition">¶</a></dt>
+<dd><p>wraper for np norm function to get euclidean metric
+:param x:
+:param y:
+:param mode: sets the mode for distance calculation
+:param img: specifies the image we are looking at, used to get the correct box size for PBC
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.get_p_vector">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">get_p_vector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">H_1</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H_2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">com</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.get_p_vector" title="Link to this definition">¶</a></dt>
+<dd><p>helper function to calculate the vector from the CoM towards the midpoint between both hydrogens
+the p vector is the normalized polarization vector vec(mid, CoM) / <a href="#id3"><span class="problematic" id="id4">|vec(mid, CoM)|</span></a></p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.get_sphere_volume">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">get_sphere_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.get_sphere_volume" title="Link to this definition">¶</a></dt>
+<dd><p>wraper to calculate volume of a sphere
+:param r: radius of the sphere
+:return: volume</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.hbond_ion_check">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">hbond_ion_check</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mol:</span> <span class="pre">[&lt;class</span> <span class="pre">'float'&gt;])</span> <span class="pre">-&gt;</span> <span class="pre">(&lt;class</span> <span class="pre">'bool'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'bool'&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#src.tools.md_class_functions.hbond_ion_check" title="Link to this definition">¶</a></dt>
+<dd><p>wraper to check if the hbonding molecules are ions or not
+:param mol: list of molecule atoms
+:return: touple of booleans (is_h3, is_oh)</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.init_rdf">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">init_rdf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_bins</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ion</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#src.tools.md_class_functions.init_rdf" title="Link to this definition">¶</a></dt>
+<dd><p>Initializes Objects to calculate the rdf from
+:param data: input data
+:param box: x,y,z of the md box
+:param n_bins: number of bins
+:param start: start radius
+:param stop: end radius
+:param data_2: optional, positions of 2nd particle type
+:param ion: bool, default false. Sets calculation mode for the rdf incase of ions
+:return: returns the scaled data, number density, the periodic tree, the bin list and bin volumes</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.scale_to_box">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">scale_to_box</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_1d</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.scale_to_box" title="Link to this definition">¶</a></dt>
+<dd><p>wraper to calculate the upscaled coordinates
+#todo:: check if data is scaled!
+:param data: data to scale
+:param box: appropriate box dimensions
+:param is_1d: boolean default=False, checks if the data array is 1D or not. used incase of ion scaling
+:return: scaled data</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.set_ckdtree">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">set_ckdtree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_leaf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">cKDTree</span></span></span><a class="headerlink" href="#src.tools.md_class_functions.set_ckdtree" title="Link to this definition">¶</a></dt>
+<dd><p>wraper to set up the periodic tree for rdf calculation
+:param input_data: data to build the tree from
+:param n_leaf: number of leafs, defaults to shape[0] of input
+:param box: size of the periodic box
+:return: periodic tree</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_functions.write_lammpstrj">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_functions.</span></span><span class="sig-name descname"><span class="pre">write_lammpstrj</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">molecules:</span> <span class="pre">[&lt;class</span> <span class="pre">'numpy.ndarray'&gt;],</span> <span class="pre">ts:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">5000,</span> <span class="pre">snapshot:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">0,</span> <span class="pre">_dir:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">n_atoms:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">0,</span> <span class="pre">box_dim:</span> <span class="pre">[&lt;class</span> <span class="pre">'numpy.ndarray'&gt;]</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">s1:</span> <span class="pre">[&lt;class</span> <span class="pre">'numpy.ndarray'&gt;]</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">s2:</span> <span class="pre">[&lt;class</span> <span class="pre">'numpy.ndarray'&gt;]</span> <span class="pre">=</span> <span class="pre">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#src.tools.md_class_functions.write_lammpstrj" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-src.tools.md_class_graphs">
+<span id="src-tools-md-class-graphs-module"></span><h2>src.tools.md_class_graphs module<a class="headerlink" href="#module-src.tools.md_class_graphs" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_graphs.plot_HB_network">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_graphs.</span></span><span class="sig-name descname"><span class="pre">plot_HB_network</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">HB_timeseries:</span> <span class="pre">[&lt;class</span> <span class="pre">'tuple'&gt;],</span> <span class="pre">trj:</span> <span class="pre">[],</span> <span class="pre">plot_oxygen=False</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_graphs.plot_HB_network" title="Link to this definition">¶</a></dt>
+<dd><p>Function to plot the hydrogen bond data for the entire series. Will result in an interactive plot with a slider
+to move thru the timesteps
+:param HB_timeseries: hydrogen bond timeseries generated by get_HB_timeseries
+:param trj: Trajectory.s2 data
+:param plot_oxygen: Boolean, if set to true will add the oxygen atoms of each H2O ontop of the bonding indicators
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_graphs.plot_HB_ratio">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_graphs.</span></span><span class="sig-name descname"><span class="pre">plot_HB_ratio</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">HB_timeseries:</span> <span class="pre">[&lt;class</span> <span class="pre">'tuple'&gt;],</span> <span class="pre">n_atoms:</span> <span class="pre">int,</span> <span class="pre">apply_smoothing:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False,</span> <span class="pre">window:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">5</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_graphs.plot_HB_ratio" title="Link to this definition">¶</a></dt>
+<dd><p>Function to plot the HB ratio with option to included a smoothed graph. Smoothing is done by applying
+a Hull Moving Average on the data. (cant find original paper will cite a paper that mentions it</p>
+<blockquote>
+<div><p><a class="reference external" href="https://doi.org/10.1504/IJMDM.2022.119582">https://doi.org/10.1504/IJMDM.2022.119582</a>)</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>HB_timeseries</strong> – HB_timeseries for whole trajectory</p></li>
+<li><p><strong>n_atoms</strong> – number of atoms i.e from Trajectory.n_atoms</p></li>
+<li><p><strong>apply_smoothing</strong> – boolean default False, determines if smoothing is applied</p></li>
+<li><p><strong>window</strong> – if smoothing is applied sets the window of the moving averege. default =5</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_graphs.plot_HB_wire">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_graphs.</span></span><span class="sig-name descname"><span class="pre">plot_HB_wire</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">wire_list:</span> <span class="pre">[[&lt;class</span> <span class="pre">'int'&gt;]],</span> <span class="pre">trj:</span> <span class="pre">~src.water_md_class.Trajectory,</span> <span class="pre">plot_hydrogens:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_graphs.plot_HB_wire" title="Link to this definition">¶</a></dt>
+<dd><p>Function to plot the HB wire from the H3O+ towards the OH- ion for a given wire.
+:param wire_list: list of list of ints denoting the O-Atoms of the Molecules involved. one entry for each timestep
+till the recombination time reach. can contain None if no direct wire exists
+:param trj: Corresponding Trajectory Object
+:param plot_hydrogens: Boolean default=False, denotes if only oxygens are plotted for molecule representation
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_graphs.plot_MSD">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_graphs.</span></span><span class="sig-name descname"><span class="pre">plot_MSD</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msd</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timestep</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0005</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_graphs.plot_MSD" title="Link to this definition">¶</a></dt>
+<dd><p>Function to plot the mean-squared displacement.
+:param msd: array containing msd data
+:param timestep: timesteps used in simulation
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_graphs.plot_d_rot">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_graphs.</span></span><span class="sig-name descname"><span class="pre">plot_d_rot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rmsd</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timestep</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0005</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_graphs.plot_d_rot" title="Link to this definition">¶</a></dt>
+<dd><p>function to plot the rotational diffusion coefficient
+:param rmsd: np array of the rmsd
+:param timestep: resolution
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_graphs.plot_hbond_network">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_graphs.</span></span><span class="sig-name descname"><span class="pre">plot_hbond_network</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">oh_bonds:</span> <span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h3_bonds:</span> <span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trj:</span> <span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ions:</span> <span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;)</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_graphs.plot_hbond_network" title="Link to this definition">¶</a></dt>
+<dd><p>Function to plot the hydrogen bond network of both ions at a single time frame
+:param oh_bonds: list of tuples containing oh bonds
+:param h3_bonds: list of tuples containing h3o bonds
+:param trj: coodrinates of oxygen atoms
+:param ions: ids of the ions (oh ion id, h3o ion id)
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_graphs.plot_hbonds_single">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_graphs.</span></span><span class="sig-name descname"><span class="pre">plot_hbonds_single</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">bonds:</span> <span class="pre">[&lt;class</span> <span class="pre">'tuple'&gt;],</span> <span class="pre">trj:</span> <span class="pre">[&lt;class</span> <span class="pre">'list'&gt;],</span> <span class="pre">start:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'OH'</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_graphs.plot_hbonds_single" title="Link to this definition">¶</a></dt>
+<dd><p>Function to plot the hydrogen bonds at a single timestep
+:param bonds: list of tuples containing the bonding pairs i.e [(1, 5), (5, 7)..]
+:param trj: trajectory of the oxygen atoms
+:param start: string, if the hbond network started from either OH or H3O ion
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_graphs.plot_ion_speed">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_graphs.</span></span><span class="sig-name descname"><span class="pre">plot_ion_speed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">oh</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h3o</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0005</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_graphs.plot_ion_speed" title="Link to this definition">¶</a></dt>
+<dd><p>Function to calculate the speed of the ions at each timestep
+:param oh: array containing OH ion coordinates
+:param h3o: array containing H3O ion coordinates
+:param dt: timestep used in simulation
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_graphs.plot_rdf">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_graphs.</span></span><span class="sig-name descname"><span class="pre">plot_rdf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'OO'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_graphs.plot_rdf" title="Link to this definition">¶</a></dt>
+<dd><p>Function to plot the radial distribution function
+:param gr: array containing the rdf
+:param r: array containing the radii
+:param type: type of the RDF used for labels
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_graphs.plot_wire_length">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_graphs.</span></span><span class="sig-name descname"><span class="pre">plot_wire_length</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">bond_tuple:</span> <span class="pre">[(&lt;class</span> <span class="pre">'int'&gt;,</span> <span class="pre">&lt;class</span> <span class="pre">'int'&gt;)],</span> <span class="pre">range:</span> <span class="pre">tuple</span> <span class="pre">=</span> <span class="pre">(None,</span> <span class="pre">None)</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_graphs.plot_wire_length" title="Link to this definition">¶</a></dt>
+<dd><p>Wrapper for plt.hist. Quick function to show the distribution of hydrogen wire length.
+:param bond_tuple: list of tuples of the form [(bond_length, time_step)]
+:param range: optional, range in the bond_tuple we want to look at. defaults to full
+:return:</p>
+</dd></dl>
+
+</section>
+<section id="module-src.tools.md_class_utility">
+<span id="src-tools-md-class-utility-module"></span><h2>src.tools.md_class_utility module<a class="headerlink" href="#module-src.tools.md_class_utility" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.calculate_hma">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">calculate_hma</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_window</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#src.tools.md_class_utility.calculate_hma" title="Link to this definition">¶</a></dt>
+<dd><p>Implementation of the Hull Movingaverage smoothing function
+:param data: data to smooth
+:param _window: window of the moving average
+:return: pandas dataframe of smoothed data</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.cut_multiple_snaps">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">cut_multiple_snaps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trajectory_obj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="src.html#src.water_md_class.Trajectory" title="src.water_md_class.Trajectory"><span class="pre">Trajectory</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder_output</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">snapshot_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_utility.cut_multiple_snaps" title="Link to this definition">¶</a></dt>
+<dd><p>Helperfunction to cut out multiply snapshot from an excisting trajectory.
+:param trajectory_obj: Trajectory class object from where the snapshots are cutout from
+:param folder_output: path of the outputfolder if such a directory does not exist it will be created
+:param snapshot_list: list of timestamps - snapshot ids - which are to be cut</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.generate_md_input">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">generate_md_input</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder_input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder_output</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">N_traj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format_in</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'lammps_data'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_scaled</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_utility.generate_md_input" title="Link to this definition">¶</a></dt>
+<dd><p>Wrapperfunction to call on the trajectory class and create N_traj different input trajectories for md simmulations
+by displacing atoms to create ions from a given water-trajectory.
+:param folder_input: path to the input trajectories
+:param folder_output: path to the folder where the ion trajectories will be saved. if it does not exist it will be created
+:param N_traj: Number of trajectories to be created, default=1
+:param format_in: Format of the files in the input folder, default=”lammps_data”. needed to decide on the correct parser
+:param is_scaled: 1 True, 0 False if the input is in scaled lammps coordinates or not.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.get_HB_timeseries">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">get_HB_timeseries</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="src.html#src.water_md_class.Trajectory" title="src.water_md_class.Trajectory"><span class="pre">Trajectory</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">cutoff</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.9</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#src.tools.md_class_utility.get_HB_timeseries" title="Link to this definition">¶</a></dt>
+<dd><p>Function to get the hydrogen bond data for the entire trajectory
+:param trj: Trajectory Class Object
+:param cutoff: cutoff used for HB calculation
+:return: returns a list of the shape [(oh_bonds, h3o_bonds, ion_ids)]</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.get_HB_wire_distance">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">get_HB_wire_distance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">wire:</span> <span class="pre">[[&lt;class</span> <span class="pre">'int'&gt;]],</span> <span class="pre">trj:</span> <span class="pre">~src.water_md_class.Trajectory,</span> <span class="pre">indices:</span> <span class="pre">[&lt;class</span> <span class="pre">'int'&gt;]</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">[&lt;class</span> <span class="pre">'float'&gt;]</span></span></span><a class="headerlink" href="#src.tools.md_class_utility.get_HB_wire_distance" title="Link to this definition">¶</a></dt>
+<dd><p>Function to calculate the average molecules (O-O) distance in a Hydrogen-Bond wire
+:param wire: list of integer list containing the Oxygen Ids
+:param trj: Trajectory Object
+:param indices: list of ints containing the timesteps
+:return: returns list of floats with the distances at the indices (in reversed, meaning ascending, order)</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.get_all_wires">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">get_all_wires</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="src.html#src.water_md_class.Trajectory" title="src.water_md_class.Trajectory"><span class="pre">Trajectory</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">cut_off</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.9</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#src.tools.md_class_utility.get_all_wires" title="Link to this definition">¶</a></dt>
+<dd><p>Function to get the length and HB-Bonds of each direct wire connecting the ions from H3O-&gt;Oh
+:param trj: Trajectory Object
+:param cut_off: Float default=2.9 cutoff distance for hydrogen bond calculation
+:return: Returns two objects (list of (wire-length, timestep) and list of bondding molecules)</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.get_averaged_rdf">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">get_averaged_rdf</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#src.tools.md_class_utility.get_averaged_rdf" title="Link to this definition">¶</a></dt>
+<dd><p>wraper to calculate the rdf over multiple trajectories
+TODO: implementation
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.get_hb_wire">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">get_hb_wire</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bonds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#src.tools.md_class_utility.get_hb_wire" title="Link to this definition">¶</a></dt>
+<dd><p>Function to calcultae the HB wire starting from a H3O+ ion
+:param bonds: list of tuples containing bonding information
+:param target: id of the OH- Ion
+:return: list of molecules in the bond wire</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.get_last_wire">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">get_last_wire</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="src.html#src.water_md_class.Trajectory" title="src.water_md_class.Trajectory"><span class="pre">Trajectory</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#src.tools.md_class_utility.get_last_wire" title="Link to this definition">¶</a></dt>
+<dd><p>Function to calculate the time index of the last HB wire connecting the OH- and H3O+ ions.
+:param trj: Trajectory Object
+:return: list of the time indices, list of tuples containing the oxygen index of the Molecules involved in the
+Hydrogen bonding</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.remove_mirror_duplicates">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">remove_mirror_duplicates</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">tuple_list:</span> <span class="pre">[&lt;class</span> <span class="pre">'tuple'&gt;]</span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">[&lt;class</span> <span class="pre">'tuple'&gt;]</span></span></span><a class="headerlink" href="#src.tools.md_class_utility.remove_mirror_duplicates" title="Link to this definition">¶</a></dt>
+<dd><p>helper function to remove mirrored duplicates of the form (a, b) -&gt; (b, a)
+from the list of hb-bonds.
+:param bonds: list of tuples containing the original bonding paris
+:return: list of tuples containing the pruned pairs</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.save_HB_Network_ovito">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">save_HB_Network_ovito</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="src.html#src.water_md_class.Trajectory" title="src.water_md_class.Trajectory"><span class="pre">Trajectory</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">cutoff</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_utility.save_HB_Network_ovito" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.save_HB_for_ovito">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">save_HB_for_ovito</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trj</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="src.html#src.water_md_class.Trajectory" title="src.water_md_class.Trajectory"><span class="pre">Trajectory</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">HB_oxygen_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#src.tools.md_class_utility.save_HB_for_ovito" title="Link to this definition">¶</a></dt>
+<dd><p>Function to save the hydrogen bonding partners (oxygens) in a format readable by ovito
+:param trj: Trajectory Class Object
+:param HB_oxygen_ids: ids of the bonded oxygens
+:param ts: timestep in the trajectory to be used
+:param path: path used to safe, default CWD
+:return:</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.tools.md_class_utility.unwrap_pbc">
+<span class="sig-prename descclassname"><span class="pre">src.tools.md_class_utility.</span></span><span class="sig-name descname"><span class="pre">unwrap_pbc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">positions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">[1,</span> <span class="pre">1,</span> <span class="pre">1,</span> <span class="pre">1,</span> <span class="pre">1]</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="headerlink" href="#src.tools.md_class_utility.unwrap_pbc" title="Link to this definition">¶</a></dt>
+<dd><p>Function to unwrap PBC for plotting
+:param position:
+:param box_dim:
+:return:</p>
+</dd></dl>
+
+</section>
+<section id="module-src.tools">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-src.tools" title="Link to this heading">¶</a></h2>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">MD_Lammps_analysis_class</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, Karim-Leon Ibrahim.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/src.tools.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
