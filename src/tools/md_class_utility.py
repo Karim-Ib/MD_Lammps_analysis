@@ -170,9 +170,6 @@ def calculate_hma(data: np.ndarray, _window: int=5) -> np.ndarray:
     return (hma.transpose()).fillna(value=0).to_numpy()[0]
 
 
-#def multi_traj_rdf(path: s) -> None:
-
-
 def get_hb_wire(bonds, target):
     '''
     Function to calcultae the HB wire starting from a H3O+ ion
@@ -322,3 +319,32 @@ def unwrap_pbc(positions: np.ndarray, box_dim: list[int] = [1, 1, 1, 1, 1]) -> n
     unwrapped[1:] += corrections
 
     return unwrapped
+
+def get_bond_lifetime(wire_length: [(int, int)], range: tuple=(None, None)) -> (float, [int]):
+    '''
+    :param wire_length: output from get_all_wires, expects a list of the form [(length, timestep)]
+    :param range: optional, range in the wire_length we want to look at. defaults to full
+    :return: returns a float with the average wire liftime and a list of ints with the liftime(in timesteps)
+     of every wire
+    '''
+
+    avg_lifetime = 0
+    lifetime_list = []
+    start, stop = range
+
+    counter = 0
+
+    for ts, HB in enumerate(wire_length[start:stop]):
+        length, time = HB
+        if length == 0:
+            if counter != 0:
+                avg_lifetime += counter
+                lifetime_list.append(counter)
+                counter = 0
+            continue
+        else:
+            counter += 1
+
+    avg_liftime = avg_lifetime / len(lifetime_list)
+
+    return avg_liftime, lifetime_list

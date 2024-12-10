@@ -341,7 +341,7 @@ class Trajectory:
                           snapshot: int = 0) \
             -> (np.ndarray, np.ndarray):
         '''
-        Routin using sklearns implementation of the KDTree datastructure for quick nearestneighbour search in O(log(n))
+        Routine using sklearns implementation of the KDTree datastructure for quick nearestneighbour search in O(log(n))
         compared to the naive O(N) approach
         :param species_1: 2D numpy array of the positions of particles from species1 (n_row, (index, species, x, y, z))
         :param species_2: 2D numpy array of the positions of particles from species2 (n_row, (index, species, x, y, z))
