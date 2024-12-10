@@ -316,9 +316,9 @@ def unwrap_pbc(positions: np.ndarray, box_dim: list[int] = [1, 1, 1, 1, 1]) -> n
     :return:
     '''
     unwrapped = positions.copy()
-    deltas = np.diff(positions, axis=0)  # Compute frame-to-frame deltas
-    shifts = np.round(deltas / box_dim)  # Compute box crossings
-    corrections = np.cumsum(shifts, axis=0) * box_dim  # Compute cumulative shifts
-    unwrapped[1:] += corrections  # Apply corrections to all but the first frame
+    deltas = np.diff(positions, axis=0)
+    shifts = np.round(deltas / box_dim)
+    corrections = np.cumsum(shifts, axis=0) * box_dim
+    unwrapped[1:] += corrections
 
     return unwrapped

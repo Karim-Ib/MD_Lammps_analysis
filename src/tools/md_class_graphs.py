@@ -380,3 +380,31 @@ def plot_HB_wire(wire_list: [[int]], trj: Trajectory, plot_hydrogens: bool=False
     plt.show()
 
     return None
+
+
+def plot_wire_length(bond_tuple: [(int, int)], range: tuple=(None, None)) -> None:
+    '''
+    Wrapper for plt.hist. Quick function to show the distribution of hydrogen wire length.
+    :param bond_tuple: list of tuples of the form [(bond_length, time_step)]
+    :param range: optional, range in the bond_tuple we want to look at. defaults to full
+    :return:
+    '''
+    start, end = range
+    bond_tuple = bond_tuple[start:end]
+    ts = []
+    bond_length = []
+
+    for bonds in bond_tuple:
+        ts.append(bonds[1])
+        bond_length.append(bonds[0])
+
+    fig, ax = plt.subplots()
+
+    ax.hist(bond_length, bins=10, edgecolor='black')
+    ax.set_title("Length of ion connecting HB wire")
+    ax.set_xlabel("Length of the Wire")
+    ax.set_ylabel("Occurrence")
+
+    plt.show()
+    return None
+
