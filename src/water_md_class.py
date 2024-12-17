@@ -1048,7 +1048,7 @@ class Trajectory:
                                  f'{O_list[O_ind, 2] * self.box_size[snapshot][2]}')
                 input_traj.write('\n')
 
-    def remove_atoms(self, N: int = 1, snap: int = 0, atom_id: int = None, format_out: str = "lammps") -> None:
+    def remove_atoms(self, N: int = 1, snap: int = 0, atom_id: int = None, path: str=None, format_out: str = "lammps") -> None:
         '''
         Method to remove molecules from a given trajectory. New trajectory will be safed as "reduced_water.format"
         in the current folder. For N=0 this can be used to simply change the format i.e lammps>XDATCAR
@@ -1056,6 +1056,7 @@ class Trajectory:
         :param snap: from which snapshot of the original trajectory are the molecules to be removed
         :param atom_id: default=None, takes an np.array of the oxygen which is to be removed with its matching
                         hydrogens. If not passed atoms will be taken at random
+        :param path: default=None, gives a path where the trajectory should be saved at defaults to CWD
         '''
 
         O_list = self.s2[snap]
@@ -1068,6 +1069,8 @@ class Trajectory:
 
         NN_list, _ = self.get_neighbour_KDT(mode='pbc', snapshot=snap)
         NN_list = np.rint(NN_list).astype(int)
+
+
 
         for i in range(N):
             to_remove_H_ind = np.append(to_remove_H_ind, np.argwhere(NN_list == atom_id[i]))
@@ -1082,7 +1085,15 @@ class Trajectory:
 
         if format_out == "lammps":
 
-            def write_lammpstrj(atoms, ts=0, snapshot=0):
+            #todo move write functions to class functions and give options for BOX style
+            def write_lammpstrj(atoms, ts=0, snapshot=0, path=None):
+
+                if path is None:
+                    water_file = "reduced_water.lammpstrj"
+                else:
+                    water_file = path + "reduced_water.lammpstrj"
+
+
                 with open("reduced_water.lammpstrj", "w") as group_traj:
                     group_traj.write('ITEM: TIMESTEP\n')
                     group_traj.write(f'{snapshot * ts}\n')
@@ -1103,7 +1114,7 @@ class Trajectory:
 
                 return
 
-            write_lammpstrj(np.vstack((O_list, H_list)), snapshot=snap)
+            write_lammpstrj(np.vstack((O_list, H_list)), snapshot=snap, path=path)
             return
 
         elif format_out == "XDATCAR":
@@ -1284,7 +1295,7 @@ class Trajectory:
         median_range = np.argwhere(np.abs(numerical_derivative - median_derivative) < eps * median_derivative)
         diffusion = median_range / (2 * 3 * timestep)
 
-        return 0
+        return diffusion
 
     def get_recombination_time(self) -> (int, bool):
         '''

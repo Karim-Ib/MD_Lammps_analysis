@@ -198,7 +198,7 @@ def plot_hbond_network(oh_bonds: [], h3_bonds: [], trj: [], ions: (int, int), fi
     ax.scatter(trj[ions[0], 2], trj[ions[0], 3], trj[ions[0], 4],
                marker="o", s=20, c="blue", label="OH-Ion")
     ax.scatter(trj[ions[1], 2], trj[ions[1], 3], trj[ions[1], 4],
-               marker="x", s=20, c="orange", label="H3O-Ion")
+               marker="x", s=20, c="purple", label="H3O-Ion")
 
     ax.set_title("Hydrogenbond Network originating from both Ions")
     plt.legend()
