@@ -14,10 +14,7 @@ trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)
 all_wire, all_bonds = get_all_wires(trj)
 #HB_dist = get_HB_wire_distance(indices, trj, last_wire)
 
-
-liftime, lt_list = get_bond_lifetime(all_wire)
-print(liftime)
-print(lt_list)
+plot_HB_wire(all_bonds, trj, plot_hydrogens=True)
 #plot_HB_timeseries(get_HB_timeseries(trj), trj.s2, plot_oxygen=True)
 #plot_HB_ratio(get_HB_timeseries(trj), trj.n_atoms, apply_smoothing=True, window=15)
 

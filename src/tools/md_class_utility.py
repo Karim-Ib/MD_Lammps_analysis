@@ -253,7 +253,7 @@ def get_all_wires(trj: Trajectory, cut_off: float=2.9) -> (List[tuple], List[Lis
     '''
 
     wire_length = []
-    hb_bonds = []
+    h_bonds = []
 
     for ts in range(trj.recombination_time):
         h3o_bonds, h3o_oxygen, ions = trj.get_hydrogen_bonds(timestep=ts, cutoff=cut_off, starting_oh=False)
@@ -265,15 +265,15 @@ def get_all_wires(trj: Trajectory, cut_off: float=2.9) -> (List[tuple], List[Lis
             if (ions[0] in temp) and (ions[1] in temp):
                 h3o_wire = get_hb_wire(reduced_bonds, ions[0])
                 wire_length.append((len(h3o_wire), ts))
-                hb_bonds.append(h3o_wire)
+                h_bonds.append(h3o_wire)
             else:
                 wire_length.append((0, ts))
-                hb_bonds.append([None])
+                h_bonds.append([None])
         else:
             wire_length.append((0, ts))
-            hb_bonds.append([None])
+            h_bonds.append([None])
 
-    return wire_length, hb_bonds
+    return wire_length, h_bonds
 
 
 def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [float]:
@@ -305,13 +305,14 @@ def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [flo
     return distances
 
 
-def unwrap_pbc(positions: np.ndarray, box_dim: list[int] = [1, 1, 1, 1, 1]) -> np.ndarray:
+def unwrap_pbc(positions: np.ndarray, box_dim: [int] = [1, 1, 1, 1, 1]) -> np.ndarray:
     '''
     Function to unwrap PBC for plotting
     :param position:
     :param box_dim:
     :return:
     '''
+
     unwrapped = positions.copy()
     deltas = np.diff(positions, axis=0)
     shifts = np.round(deltas / box_dim)

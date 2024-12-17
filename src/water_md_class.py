@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import regex
 import string
+
+import scipy.ndimage
 from rdfpy import rdf
 from scipy.spatial import cKDTree
 from scipy.integrate import trapezoid
@@ -137,9 +139,9 @@ class Trajectory:
                 if snap > 4 and snap < 8:
                     box_dim.append(np.array([float(i) for i in line.split()[:2]]))
 
-                # todo: fix the regexp.match issue between windows and linux
-                # n_atoms=384
-                if snap > 16 and snap < 16 + n_atoms + 1:
+                #todo: fix the regexp.match issue between windows and linux
+                n_atoms=384
+                if snap > 16 and snap < (16 + n_atoms + 1):
                     atom_list.append(np.array([float(i) for i in line.split()[:5]]))
 
         # transform list of box information into useful square data format.
@@ -464,7 +466,7 @@ class Trajectory:
 
             # note: find nearest O atom for each H atom
             indexlist_group, _ = self.get_neighbour_KDT(species_1=self.s1[i],
-                                                        species_2=self.s2[i], mode="pbc", snapshot=0)
+                                                        species_2=self.s2[i], mode="pbc", snapshot=i)
 
             # note: find he  number of  occourence of O atoms for which it is the nearest to an H atom.
             # -> for H2O each O atom will count twice, for each H3O+ each O atom will count 3 times and so on.
@@ -480,18 +482,16 @@ class Trajectory:
                     H3O_id = _list[-1]
                 else:
                     pass
-            try:
-                if OH_id is None or H3O_id is None:
-                    raise ValueError("Either OH or H3O index was not found")
 
-                temp = get_distance(self.trajectory[i, OH_id, 2:], self.trajectory[i, H3O_id, 2:], img=i,
-                                    box=self.box_size, mode="pbc")
+            if (OH_id is None) or (H3O_id is None):
+                self.ion_distance[i, :] = np.array([i] + [0, 0, 0]
+                                                   + [0, 0, 0] + [0])
+            else:
+                temp = get_distance(self.trajectory[i, OH_id, 2:], self.trajectory[i, H3O_id, 2:], mode="pbc")
 
                 self.ion_distance[i, :] = np.array([i] + self.trajectory[i, OH_id, 2:].tolist()
                                                    + self.trajectory[i, H3O_id, 2:].tolist() + [temp])
-            except ValueError:
-                self.ion_distance[i, :] = np.array([i] + [0, 0, 0]
-                                                   + [0, 0, 0] + [0])
+
 
         return self.ion_distance
 
@@ -789,7 +789,7 @@ class Trajectory:
         return
 
     def get_displace(self, snapshot: int = 0, id: int = None, distance: float = 0.05, eps: float = 0.01,
-                     path: str = None, num_traj: int = None):
+                     path: str = None, file_name: str=None, num_traj: int = None):
         '''
         Method to generate an ionized watertrajectory by displacing one hydrogen to get H3O/OH
         :param snapshot: index of the snapshot at which the displacement should happen
@@ -800,7 +800,7 @@ class Trajectory:
         :param dp_factor: factor with which the hydrogens coordinates differ to its reference,
                 NOTE will get replaced by a collision detection method
         :param path: Optional path to safe the file in, otherwise it will be safed in the current directory
-        :param name: Optional file name, otherwise it will be called "water.data"
+        :param file_name: Optional file name, otherwise it will be called "water.data"
         :param num_traj: Optional number of different trajectories to be generated
         :return: trajectory with one Hydrogen displaced
         '''
@@ -823,18 +823,23 @@ class Trajectory:
                     return new_H
             return new_H
 
-        if path is None:
-            water_file = "water.data"
-        else:
-            water_file = path + "water.data"
 
         if num_traj is None:
             if id is None:
                 id = np.random.randint(0, len(self.s2[0]))
 
-            traj = self.trajectory[snapshot]
+            if path is None and file_name is None:
+                water_file = "water.data"
+            if path is not None and file_name is not None:
+                water_file = path + file_name + ".data"
+            if path is None and file_name is not None:
+                water_file = file_name + ".data"
+            if path is not None and file_name is None:
+                water_file = path + "water.data"
+
             O_list = self.s2[snapshot]
             H_list = self.s1[snapshot]
+            self.indexlist, _ = self.get_neighbour_KDT(H_list, O_list, mode="pbc")
             O_list = O_list[:, 2:]
             H_list = H_list[:, 2:]
             reference_O = O_list[id, :]
@@ -910,13 +915,22 @@ class Trajectory:
                 warnings.warn("num_traj is not an integer, it will be converted. please check format")
 
             for copy in range(num_traj):
-
+                print(copy)
                 if id is None:
                     id = np.random.randint(0, len(self.s2[0]))
 
-                traj = self.trajectory[snapshot]
+                if path is None and file_name is None:
+                    water_file = "water" + "_" + str(copy) + ".data"
+                if path is not None and file_name is not None:
+                    water_file = path + file_name + "_" + str(copy) + ".data"
+                if path is None and file_name is not None:
+                    water_file = file_name + "_" + str(copy) + ".data"
+                if path is not None and file_name is None:
+                    water_file = path + "water" + "_" + str(copy) + ".data"
+
                 O_list = self.s2[snapshot]
                 H_list = self.s1[snapshot]
+                self.indexlist, _ = self.get_neighbour_KDT(H_list, O_list, mode="pbc")
                 O_list = O_list[:, 2:]
                 H_list = H_list[:, 2:]
                 reference_O = O_list[id, :]
@@ -945,7 +959,7 @@ class Trajectory:
                         H_list[:, :][temp] = H_list[:, :][temp] - 1
                         temp = H_list[:, :] < 0
                         H_list[:, :][temp] = H_list[:, :][temp] + 1
-                        water_file = water_file + "_" + str(copy)
+
 
                         with open(water_file, "a") as input_traj:
                             input_traj.write('translated LAMMPS data file via gromacsconf\n')
@@ -979,6 +993,7 @@ class Trajectory:
                                 input_traj.write('\n')
                         if self.verbosity == "loud":
                             print(f"trajectory saved as water_{copy}.data")
+                        break
 
                     else:
                         distances.append(temp)
@@ -1257,14 +1272,17 @@ class Trajectory:
 
         return msd_array / len(molecule_list[0])
 
-    def get_translational_diffusion(self, timestep: int = 0.0005) -> np.ndarray:
+    def get_translational_diffusion(self, MSD: np.ndarray, timestep: int = 0.0005, eps: float=0.1) -> np.ndarray:
         # todo:: finish implementation
-        diffusion = np.empty(self.n_snapshots)
+        numerical_derivative = np.zeros(MSD.shape[0] - 1)
 
-        for dt in range(self.n_snapshots):
-            diffusion[dt] = 0
+        for dt in range(len(MSD) - 1):
+            deriv = (MSD[dt + 1] - MSD[dt]) / timestep
+            numerical_derivative[dt] = deriv
 
-        diffusion /= 2 * 3 * timestep
+        median_derivative = scipy.ndimage.median(numerical_derivative)
+        median_range = np.argwhere(np.abs(numerical_derivative - median_derivative) < eps * median_derivative)
+        diffusion = median_range / (2 * 3 * timestep)
 
         return 0
 

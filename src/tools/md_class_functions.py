@@ -3,15 +3,16 @@ from typing import Union
 from scipy.spatial import cKDTree
 
 
-def get_distance(x: Union[list, np.ndarray], y: Union[list, np.ndarray], img: int=None, box: []=None, mode: str='normal') -> float:
+def get_distance(x: Union[list, np.ndarray], y: Union[list, np.ndarray], box: []=None, mode: str='normal') -> float:
     #TODO: check if img, box parameters are needed since we normalize anyways box should always be [1,1,1] for
     # each snapshot
     '''
     wraper for np norm function to get euclidean metric
     :param x:
     :param y:
+    :param box: list expect [length, width, height] of the simulation box when used with self.box_size specify
+    the time step if none is given a normalised box of size [1, 1, 1] is assumed
     :param mode: sets the mode for distance calculation
-    :param img: specifies the image we are looking at, used to get the correct box size for PBC
     :return:
     '''
 
