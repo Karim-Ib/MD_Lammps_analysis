@@ -120,12 +120,53 @@ def save_HB_Network_ovito(trj: Trajectory, cutoff: float=2.9, path: str="") -> N
     return None
 
 
-def get_averaged_rdf() -> np.ndarray:
+def get_averaged_rdf(path_load: str="Z:\\cluster_runs\\runs",
+                     path_save: str="C:\\Users\\Nutzer\\Documents\\GitHub\\MD_Lammps_analysis_class\\tutorial_notebook",
+                     target_folder: str="recombination", file_name: str="trjwater.lammpstrj",
+                     rdf_type: [str]=["OO", "HH", "OH", "OH_ion", "H3O_ion"], trj_scaled: int=0, trj_formatting: str="lammpstrj",
+                     rdf_stop: float=8.0, rdf_nbins: int=50) -> []:
     '''
-    wraper to calculate the rdf over multiple trajectories
-    TODO: implementation
+    :param path_load: directory which contains the cluster run sub-folders which contain the trajectory files
+    :param path_save: directory where to save the results at
+    :param target_folder: name to match which folders in the directory we want to look into
+    :param file_name: name of the trajectory file
+    :param rdf_type: type of the RDF we want to calculate default "OO"
     :return:
     '''
+
+    parent_directory = path_load
+    target_name = target_folder
+    file_name = file_name
+
+    recombination_path = os.path.join(path_save, "recombination_times.csv")
+    recombination_list = []
+    rdf_counter = 0
+
+    for root, dirs, files in os.walk(parent_directory):
+        for dir_name in dirs:
+            if target_name in dir_name:
+                target_path = os.path.join(root, dir_name)
+                file_path = os.path.join(target_path, file_name)
+                trj = Trajectory(file_path, format=trj_formatting, scaled=trj_scaled)
+                if not trj.did_recombine:
+                    continue
+                print(f'Trajectory {file_path} loaded')
+
+                recombination_list.append(trj.recombination_time)
+                rdf_list = np.zeros((len(rdf_type), rdf_nbins - 1))
+
+                for key, type in enumerate(rdf_type):
+                    RDF = trj.get_rdf_rdist(gr_type=type, stop=rdf_stop, n_bins=rdf_nbins)
+
+                    rdf_list[key, :] += RDF[0]
+                rdf_counter += 1
+
+                for key, type in enumerate(rdf_type):
+                    rdf_file_name = type + "_RDF_averaged.csv"
+                    rdf_path = os.path.join(path_save, rdf_file_name)
+
+                    np.savetxt(rdf_path,np.stack((rdf_list[key, :] / rdf_counter, RDF[1])), delimiter=",")
+                np.savetxt(recombination_path,recombination_list, delimiter=",")
     return None
 
 

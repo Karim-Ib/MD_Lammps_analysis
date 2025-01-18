@@ -1293,9 +1293,9 @@ class Trajectory:
 
         median_derivative = scipy.ndimage.median(numerical_derivative)
         median_range = np.argwhere(np.abs(numerical_derivative - median_derivative) < eps * median_derivative)
-        diffusion = median_range / (2 * 3 * timestep)
+        diffusion = median_derivative[median_range] / (2 * 3 * timestep)
 
-        return diffusion
+        return np.average(diffusion)
 
     def get_recombination_time(self) -> (int, bool):
         '''
