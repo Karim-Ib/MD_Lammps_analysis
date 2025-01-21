@@ -449,24 +449,55 @@ def plot_wire_length(bond_tuple: [(int, int)], range: tuple=(None, None), fig_si
 
 
 def plot_rdf_from_file(directory_file: str, single_rdf: bool=False,
-                       graph_color: str=None, labels: str=None, grid: bool=False) -> None:
-
+                       graph_color: str=None, labels: str=None, grid: bool=False, grid_row: int=2, grid_col: int=3,
+                       fig_size: (int, int)=(8, 6)) -> None:
+    '''
+    Function to plot the radial distribution function given the directory where the files are stored. expect the input
+    from md_class_utility.get_averaged_rdf or in a similar shape. Function will iterate thru a given directory
+    and load all avialable rdfs + names.
+    :param directory_file: directory or file of the RDF.csv
+    :param single_rdf: boolean default=False. if only a single RDF is to be ploted
+    :param graph_color: graph colors defaults are ["blue", "green", "red", "purple", "orange"]
+    :param labels: graph labels if none is given they are taken from the file names
+    :param grid: boolean default=False. determines if all rdf's are plotet in a single graph or if the graphs are ploted
+    as a grid of subplots
+    :param grid_row: if grid=True number of rows in the grid default=2
+    :param grid_col: if grid=True number of cols in the grid default=3
+    :param fig_size: size of the figure in inches default = (8,6)
+    :return:
+    '''
     if graph_color is None:
         graph_color = ["blue", "green", "red", "purple", "orange"]
     if labels is None:
         label_files = [f for f in os.listdir(directory_file) if os.path.isfile(os.path.join(directory_file, f))]
         labels = [f.removesuffix('_RDF_averaged.csv') for f in label_files]
+    if not grid:
+        fig, ax = plt.subplots()
 
-    fig, ax = plt.subplots()
+        for num, rdf_file in enumerate(label_files):
+            rdf = np.loadtxt(os.path.join(directory_file, rdf_file), delimiter=",")
+            ax.plot(rdf[1], rdf[0], color=graph_color[num], label=labels[num])
 
-    for num, rdf_file in enumerate(label_files):
-        rdf = np.loadtxt(os.path.join(directory_file, rdf_file), delimiter=",")
-        ax.plot(rdf[1], rdf[0], color=graph_color[num], label=labels[num])
-
-    ax.set_xlabel(r'r in Å')
-    ax.set_ylabel("g(r)")
-    ax.set_title("Radial Distribution Function(RDF) of ionized water")
-    plt.legend()
-    plt.grid()
-    plt.show()
+        ax.set_xlabel(r'r in Å')
+        ax.set_ylabel("g(r)")
+        ax.set_title("Radial Distribution Function(RDF) of ionized water")
+        plt.legend()
+        plt.grid()
+        plt.show()
+    elif grid:
+        rows = grid_row
+        cols = grid_col
+        fig, ax = plt.subplots(rows, cols, figsize=fig_size)
+        ax = ax.flatten()
+        for num, rdf_file in enumerate(label_files):
+            rdf = np.loadtxt(os.path.join(directory_file, rdf_file), delimiter=",")
+            ax[num].plot(rdf[1], rdf[0], color=graph_color[num], label=labels[num])
+            ax[num].set_title(f"{labels[num]}")
+            ax[num].set_xlabel(r'r in Å')
+            ax[num].set_ylabel("g(r)")
+        for unused in range(len(labels), len(ax)):
+            fig.delaxes(ax[unused])
+        fig.suptitle("Radial Distribution Function(RDF) of ionized water")
+        plt.tight_layout()
+        plt.show()
     return None
