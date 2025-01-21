@@ -447,3 +447,26 @@ def plot_wire_length(bond_tuple: [(int, int)], range: tuple=(None, None), fig_si
     plt.show()
     return None
 
+
+def plot_rdf_from_file(directory_file: str, single_rdf: bool=False,
+                       graph_color: str=None, labels: str=None, grid: bool=False) -> None:
+
+    if graph_color is None:
+        graph_color = ["blue", "green", "red", "purple", "orange"]
+    if labels is None:
+        label_files = [f for f in os.listdir(directory_file) if os.path.isfile(os.path.join(directory_file, f))]
+        labels = [f.removesuffix('_RDF_averaged.csv') for f in label_files]
+
+    fig, ax = plt.subplots()
+
+    for num, rdf_file in enumerate(label_files):
+        rdf = np.loadtxt(os.path.join(directory_file, rdf_file), delimiter=",")
+        ax.plot(rdf[1], rdf[0], color=graph_color[num], label=labels[num])
+
+    ax.set_xlabel(r'r in Å')
+    ax.set_ylabel("g(r)")
+    ax.set_title("Radial Distribution Function(RDF) of ionized water")
+    plt.legend()
+    plt.grid()
+    plt.show()
+    return None

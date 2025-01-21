@@ -6,8 +6,8 @@ from src.tools.md_class_graphs import *
 
 
 
-get_averaged_rdf(trj_scaled=1)
-
+#get_averaged_rdf(trj_scaled=1, rdf_type=["OH_ion", "H3O_ion"])
+plot_rdf_from_file("C:\\Users\\Nutzer\\Documents\\GitHub\\MD_Lammps_analysis_class\\test_results\\rdf_csv")
 
 #ts = 768
 #trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)

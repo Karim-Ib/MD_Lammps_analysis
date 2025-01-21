@@ -1284,7 +1284,6 @@ class Trajectory:
         return msd_array / len(molecule_list[0])
 
     def get_translational_diffusion(self, MSD: np.ndarray, timestep: int = 0.0005, eps: float=0.1) -> np.ndarray:
-        # todo:: finish implementation
         numerical_derivative = np.zeros(MSD.shape[0] - 1)
 
         for dt in range(len(MSD) - 1):

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
+from datetime import datetime
 from typing import List
 from src.water_md_class import Trajectory
 from src.tools.md_class_functions import get_distance, scale_to_box
@@ -140,6 +141,7 @@ def get_averaged_rdf(path_load: str="Z:\\cluster_runs\\runs",
 
     recombination_path = os.path.join(path_save, "recombination_times.csv")
     recombination_list = []
+    rdf_list = np.zeros((len(rdf_type), rdf_nbins - 1))
     rdf_counter = 0
 
     for root, dirs, files in os.walk(parent_directory):
@@ -151,9 +153,10 @@ def get_averaged_rdf(path_load: str="Z:\\cluster_runs\\runs",
                 if not trj.did_recombine:
                     continue
                 print(f'Trajectory {file_path} loaded')
+                print(datetime.now().strftime("%H:%M"))
 
                 recombination_list.append(trj.recombination_time)
-                rdf_list = np.zeros((len(rdf_type), rdf_nbins - 1))
+                #rdf_list = np.zeros((len(rdf_type), rdf_nbins - 1))
 
                 for key, type in enumerate(rdf_type):
                     RDF = trj.get_rdf_rdist(gr_type=type, stop=rdf_stop, n_bins=rdf_nbins)
