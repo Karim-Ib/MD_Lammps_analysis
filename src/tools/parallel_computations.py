@@ -20,6 +20,18 @@ def split_list(_list: [], n_split: int=4) -> []:
 
 
 def mp_average(paths_load, core_number, path_save, rdf_type, trj_scaled, trj_formatting, rdf_stop, rdf_nbins) -> None:
+    '''
+    Helper function to calculate the rdf average using the multiprocessing module.
+    :param paths_load:
+    :param core_number:
+    :param path_save:
+    :param rdf_type:
+    :param trj_scaled:
+    :param trj_formatting:
+    :param rdf_stop:
+    :param rdf_nbins:
+    :return:
+    '''
     recombination_path = os.path.join(path_save, str(core_number)+"_recombination_times.csv")
     recombination_list = []
     rdf_list = np.zeros((len(rdf_type), rdf_nbins - 1))
@@ -43,7 +55,7 @@ def mp_average(paths_load, core_number, path_save, rdf_type, trj_scaled, trj_for
         rdf_counter += 1
 
         for key, type in enumerate(rdf_type):
-            rdf_file_name = type + str(core_number) + "_RDF_averaged.csv"
+            rdf_file_name = type + "_" + str(core_number) + "_RDF_averaged.csv"
             rdf_path = os.path.join(path_save, rdf_file_name)
 
             np.savetxt(rdf_path,np.stack((rdf_list[key, :] / rdf_counter, RDF[1])), delimiter=",")
@@ -52,16 +64,26 @@ def mp_average(paths_load, core_number, path_save, rdf_type, trj_scaled, trj_for
     return None
 
 
-def manage_pools(n: int=4, function_rdf: callable=mp_average, argument_list: []=None)->None:
+def manage_pools(n: int=4, function_rdf: callable=mp_average, argument_list: []=None) -> None:
+    '''
+    wraper to initialize the parallel pool with a given number of workers.
+    :param n: number of workers(cores used)
+    :param function_rdf: function we want to run in parallel
+    :param argument_list: list of tuples of arguments spread among the cores and passed towards the function
+    :return: None
+    '''
     parallel_pool = mp.Pool(n)
     parallel_pool.starmap(function_rdf, argument_list)
+    parallel_pool.close()
+    parallel_pool.join()
 
+    return None
 
 def get_averaged_rdf(path_load: str="Z:\\cluster_runs\\runs",
                      path_save: str="C:\\Users\\Nutzer\\Documents\\GitHub\\MD_Lammps_analysis_class\\tutorial_notebook",
                      target_folder: str="recombination", file_name: str="trjwater.lammpstrj",
                      rdf_type: [str]=["OO", "HH", "OH", "OH_ion", "H3O_ion"], trj_scaled: int=0, trj_formatting: str="lammpstrj",
-                     rdf_stop: float=8.0, rdf_nbins: int=50, multi_proc: bool=False, n_workers: int=4) -> []:
+                     rdf_stop: float=8.0, rdf_nbins: int=50, multi_proc: bool=False, n_workers: int=4) -> None:
     '''
     :param path_load: directory which contains the cluster run sub-folders which contain the trajectory files
     :param path_save: directory where to save the results at
@@ -75,7 +97,7 @@ def get_averaged_rdf(path_load: str="Z:\\cluster_runs\\runs",
     :param multi_proc: boolean default=False determines if the code should run a parallel implementation
     :param n_workers: int default=4 only used if multi_proc=True. number of cores used cant be larger then N_cores - 1
     of the machine
-    :return:
+    :return: None
     '''
 
     parent_directory = path_load
@@ -131,9 +153,30 @@ def get_averaged_rdf(path_load: str="Z:\\cluster_runs\\runs",
                              rdf_stop, rdf_nbins))
 
         start_t = time.monotonic()
-
         manage_pools(argument_list=arg_list)
         end_t = time.monotonic()
+
+        for type in rdf_type:
+            rdf_combination = np.zeros((n_workers, rdf_nbins - 1))
+            for core in range(n_workers):
+                current_file = type + "_" + str(core) + "_RDF_averaged.csv"
+                temp = np.loadtxt(os.path.join(path_save, current_file))
+                rdf_combination[core, :] = temp[0, :]
+                os.remove(os.path.join(path_save, current_file))
+            _save = rdf_combination.sum(axis=0)
+            _save /= n_workers
+            _save = np.vstack((temp[1, :], _save))
+            np.savetxt(os.path.join(path_save, type + "_RDF_averaged.csv"))
+
+        recombination_list = np.array([])
+
+        for core in range(n_workers):
+            current_file = str(core)+"_recombination_times.csv"
+            temp = np.loadtxt(os.path.join(path_save, current_file))
+            recombination_list = np.append(recombination_list, temp)
+            os.remove(os.path.join(path_save, current_file))
+
+        np.savetxt(os.path.join(path_save, "recombination_times.csv"))
 
         print(f'time for running with {n_workers} processes {(end_t-start_t):.2f} s')
 

@@ -364,33 +364,80 @@ def get_all_wires(trj: Trajectory, cut_off: float=2.9) -> (List[tuple], List[Lis
     return wire_length, h_bonds
 
 
-def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]) -> [float]:
+def get_HB_wire_distance(wire: [[int]], trj: Trajectory, indices: [int]=None) -> [float]:
     '''
-    Function to calculate the average molecules (O-O) distance in a Hydrogen-Bond wire
-    :param wire: list of integer list containing the Oxygen Ids
+    Function to calculate the average molecules (O-O) distance in a Hydrogen-Bond wire. Calculation will depend
+    on the input type of wire and indices. by default it will calculate the distances of the last H-Bond wire.
+    If the wire data of an entire trajectory is passed the distances between the O-O Atoms of each wire is calculated.
+    :param wire: list of integer list containing the Oxygen Ids, expects input from get_last_wire or get_all_wires
     :param trj: Trajectory Object
-    :param indices: list of ints containing the timesteps
+    :param indices: list of ints containing the timesteps, expects input from get_last_wire or get_all_wires
     :return: returns list of floats with the distances at the indices (in reversed, meaning ascending, order)
     '''
 
-    distances = []
-    for ind, ts in enumerate(indices):
-        coords = trj.s2[ts][:, 2:]
-        current_wire = wire[ind]
-        temp = 0
-        print(current_wire)
-        for water_mol in range(1, len(current_wire)):
-            print((current_wire[water_mol- 1] , current_wire[water_mol]))
+    if indices is None:
 
-            temp += get_distance(x=scale_to_box(data=coords[current_wire[water_mol- 1], :], box=trj.box_size[ts],
-                                             is_1d=True),
-                                 y=scale_to_box(data=coords[current_wire[water_mol], :], box=trj.box_size[ts],
-                                              is_1d=True),
-                                 box=trj.box_size[ts], mode="pbc")
+        grouped = []
+        indices = []
+        current_wire = []
+        current_group = []
 
-        distances.append(temp / (len(current_wire) - 1))
+        ind_counter = 0
 
-    return distances
+        for sublist in wire:
+            if sublist != [None]:  # Check if the sublist is not [None]
+                current_group.append(sublist)
+                current_wire.append(ind_counter)
+            else:
+                if current_group:  # If there's an ongoing group, save it
+                    grouped.append(current_group)
+                    indices.append(current_wire)
+                    current_group = []  # Reset for the next group
+                    current_wire = []
+            ind_counter += 1
+
+        if current_group:  # Add the last group if not empty
+            grouped.append(current_group)
+            indices.append(current_wire)
+
+
+        distances = []
+
+        for slot, ind in enumerate(indices):
+            _distances = []
+            for key, ts in enumerate(ind):
+                coords = trj.s2[ts][:, 2:]
+                current_wire = grouped[slot][key]
+                temp = 0
+                for water_mol in range(1, len(current_wire)):
+
+                    temp += get_distance(x=scale_to_box(data=coords[current_wire[water_mol- 1], :], box=trj.box_size[ts],
+                                                        is_1d=True),
+                                         y=scale_to_box(data=coords[current_wire[water_mol], :], box=trj.box_size[ts],
+                                                        is_1d=True),
+                                         box=trj.box_size[ts], mode="pbc")
+
+                _distances.append(temp / (len(current_wire) - 1))
+            distances.append(_distances)
+        return distances
+
+    else:
+        distances = []
+        for ind, ts in enumerate(indices):
+            coords = trj.s2[ts][:, 2:]
+            current_wire = wire[ind]
+            temp = 0
+            for water_mol in range(1, len(current_wire)):
+
+                temp += get_distance(x=scale_to_box(data=coords[current_wire[water_mol- 1], :], box=trj.box_size[ts],
+                                                 is_1d=True),
+                                     y=scale_to_box(data=coords[current_wire[water_mol], :], box=trj.box_size[ts],
+                                                  is_1d=True),
+                                     box=trj.box_size[ts], mode="pbc")
+
+            distances.append(temp / (len(current_wire) - 1))
+
+        return distances
 
 
 def unwrap_pbc(positions: np.ndarray, box_dim: [int] = [1, 1, 1, 1, 1]) -> np.ndarray:

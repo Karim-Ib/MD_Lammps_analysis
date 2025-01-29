@@ -3,21 +3,27 @@ import numpy as np
 from testing_cases import read_lammps_test, MSD_test
 from src.tools.md_class_utility import *
 from src.tools.md_class_graphs import *
+from src.tools.parallel_computations import *
 
 
-
-get_averaged_rdf(trj_scaled=1, rdf_type=["OH_ion", "H3O_ion"], multi_proc=True)
+#get_averaged_rdf(trj_scaled=1, rdf_type=["OH_ion", "H3O_ion"], multi_proc=True)
 #plot_rdf_from_file("C:\\Users\\Nutzer\\Documents\\GitHub\\MD_Lammps_analysis_class\\test_results\\rdf_csv", grid=True)
 
 #ts = 768
-#trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)
+trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)
 
 #bonds_h3, oxygens_h3, ion_ids_h3 = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=False)
 #bonds_oh, oxygens_oh, ion_ids_oh = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=True)
 
-#last_wire, indices = get_last_wire(trj)
-#all_wire, all_bonds = get_all_wires(trj)
-#HB_dist = get_HB_wire_distance(indices, trj, last_wire)
+last_wire, indices = get_last_wire(trj)
+all_wire, all_bonds = get_all_wires(trj)
+
+'''print(  f'last wire {last_wire}',
+      f'indice {indices}')'''
+HB_dist = get_HB_wire_distance(all_bonds, trj)
+print(HB_dist)
+#print(HB_dist)
+
 
 #plot_HB_wire(all_bonds, trj, plot_hydrogens=True)
 #plot_HB_timeseries(get_HB_timeseries(trj), trj.s2, plot_oxygen=True)
@@ -69,3 +75,5 @@ print(get_distance(scale_to_box(trj.s2[774][115, 2:], trj.box_size[774], is_1d=T
 
 #plot_HB_timeseries(indices, trj.s2)
 
+'''if __name__ == "__main__":
+    get_averaged_rdf(trj_scaled=1, rdf_type=["OH_ion", "H3O_ion"], multi_proc=True)'''
