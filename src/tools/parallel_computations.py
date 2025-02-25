@@ -79,6 +79,7 @@ def manage_pools(n: int=4, function_rdf: callable=mp_average, argument_list: []=
 
     return None
 
+
 def get_averaged_rdf(path_load: str="Z:\\cluster_runs\\runs",
                      path_save: str="C:\\Users\\Nutzer\\Documents\\GitHub\\MD_Lammps_analysis_class\\tutorial_notebook",
                      target_folder: str="recombination", file_name: str="trjwater.lammpstrj",

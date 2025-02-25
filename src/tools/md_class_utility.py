@@ -456,6 +456,7 @@ def unwrap_pbc(positions: np.ndarray, box_dim: [int] = [1, 1, 1, 1, 1]) -> np.nd
 
     return unwrapped
 
+
 def get_bond_lifetime(wire_length: [(int, int)], range: tuple=(None, None)) -> (float, [int]):
     '''
     :param wire_length: output from get_all_wires, expects a list of the form [(length, timestep)]
@@ -484,3 +485,60 @@ def get_bond_lifetime(wire_length: [(int, int)], range: tuple=(None, None)) -> (
     avg_liftime = avg_lifetime / len(lifetime_list)
 
     return avg_liftime, lifetime_list
+
+
+def get_transition_cations(trj: Trajectory, reverse=False) -> ([], [], []):
+    '''
+    Function to calculate the Hydrogen Bonded Structures around the ions
+    :param trj: Trajectory Object
+    :param revers: boolean default=False, if set True calculates the Structures for the OH- Ion
+    :return: 3 lists: bonding Oxygens at each timestep, list of all contributing atoms, ion atom ID at each timestep
+    '''
+    timestep_bonds = [None] * trj.recombination_time
+    ion_ts = []
+
+    if not reverse:
+        for ts in range(trj.recombination_time):
+            #todo: implement separate scheme to only calculate bonds for NN not entire wire-> efficient
+            h3o_bonds, h3o_oxygen, ions = trj.get_hydrogen_bonds(timestep=ts, cutoff=3.0, starting_oh=False)
+            ion_ts.append(ions[1])
+            if h3o_bonds:
+                reduced_bonds = remove_mirror_duplicates(h3o_bonds)
+                temp = [*reduced_bonds]
+                _ = []
+                for bond in temp:
+                    if ions[1] in bond:
+                        _.append(bond)
+                timestep_bonds[ts] = _
+            else:
+                timestep_bonds[ts] = [(ions[1],)]
+    if reverse:
+        for ts in range(trj.recombination_time):
+            oh_bonds, oh_oxygen, ions = trj.get_hydrogen_bonds(timestep=ts, cutoff=3.0, starting_oh=True)
+            ion_ts.append(ions[0])
+            if oh_bonds:
+                reduced_bonds = remove_mirror_duplicates(oh_bonds)
+                temp = [*reduced_bonds]
+                _ = []
+                for bond in temp:
+                    if ions[0] in bond:
+                        _.append(bond)
+                timestep_bonds[ts] = _
+            else:
+                timestep_bonds[ts] = [(ions[0],)]
+
+    oxygen_structures = [set(item for tup in sublist for item in tup) for sublist in timestep_bonds]
+    molecule_list = []
+    for ts, bonds in enumerate(oxygen_structures):
+        indexlist_group, _ = trj.get_neighbour_KDT(mode="pbc", snapshot=ts)
+        _ = []
+        for mol in bonds:
+            if mol == 0:
+               _.append([None])
+            else:
+                _ .append(np.append(np.argwhere(indexlist_group == mol), mol).tolist())
+
+        molecule_list.append(_)
+
+    return timestep_bonds, molecule_list, ion_ts
+

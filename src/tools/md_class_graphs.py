@@ -3,7 +3,7 @@ from src.water_md_class import *
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
-from matplotlib.widgets import Slider
+from matplotlib.widgets import Slider, Button
 import matplotlib.patches as mpatches
 
 
@@ -163,7 +163,7 @@ def plot_hbond_network(oh_bonds: [], h3_bonds: [], trj: [], ions: (int, int), fi
     Function to plot the hydrogen bond network of both ions at a single time frame
     :param oh_bonds: list of tuples containing oh bonds
     :param h3_bonds: list of tuples containing h3o bonds
-    :param trj: coodrinates of oxygen atoms
+    :param trj: coodrinates of oxygen atoms trj.s2
     :param ions: ids of the ions (oh ion id, h3o ion id)
     :param fig_size: determinse size of plot default 8x6 inches
     :return:
@@ -286,7 +286,8 @@ def plot_HB_network(HB_timeseries: [tuple], trj: [], plot_oxygen=False, fig_size
     return None
 
 
-def plot_HB_ratio(HB_timeseries: [tuple], n_atoms: int, apply_smoothing: bool=False, window: int=5, fig_size: (int, int)=(8, 6)) -> None:
+def plot_HB_ratio(HB_timeseries: [tuple], n_atoms: int, apply_smoothing: bool=False, window: int=5,
+                  fig_size: (int, int)=(8, 6)) -> None:
     '''
     Function to plot the HB ratio with option to included a smoothed graph. Smoothing is done by applying
     a Hull Moving Average on the data. (cant find original paper will cite a paper that mentions it
@@ -357,8 +358,23 @@ def plot_HB_wire(wire_list: [[int]], trj: Trajectory, plot_hydrogens: bool=False
     fig = plt.figure(figsize=fig_size)
     ax_plot = fig.add_axes([0, 0, 1, 0.8], projection="3d")
     ax_slider = fig.add_axes([0.1, 0.85, 0.8, 0.1])
+    ax_prev = plt.axes([0.05, 0.1, 0.1, 0.04])
+    ax_next = plt.axes([0.05, 0.2, 0.1, 0.04])
 
     s = Slider(ax=ax_slider, label="Timestep", valmin=0, valmax=len(wire_list)-1, valinit=0, valfmt="%i")
+    btn_prev = Button(ax_prev, 'Previous')
+    btn_next = Button(ax_next, 'Next')
+
+    def next_frame(event):
+        current_val = int(s.val)
+        if current_val < (len(wire_list) - 2):
+            s.set_val(current_val + 1)
+
+    def prev_frame(event):
+        current_val = int(s.val)
+        if current_val > 0:
+            s.set_val(current_val - 1)
+
 
     def update(val):
         value = int(s.val)
@@ -397,6 +413,9 @@ def plot_HB_wire(wire_list: [[int]], trj: Trajectory, plot_hydrogens: bool=False
             pass
 
     s.on_changed(update)
+    btn_next.on_clicked(next_frame)
+    btn_prev.on_clicked(prev_frame)
+
     update(0)
     if plot_hydrogens:
         legend_items = [
@@ -500,4 +519,101 @@ def plot_rdf_from_file(directory_file: str, single_rdf: bool=False,
         fig.suptitle("Radial Distribution Function(RDF) of ionized water")
         plt.tight_layout()
         plt.show()
+    return None
+
+
+def plot_hb_distances(distances: [[int]], fig_size: (int, int)=(8, 6)) -> None:
+
+    n_wire = len(distances)
+    fig, ax = plt.subplots(figsize=fig_size)
+    cmap = plt.get_cmap('tab20')
+    colors = [cmap(i % cmap.N) for i in range(n_wire)]
+
+    for key, wire in enumerate(distances):
+        x = np.arange(len(wire))
+        plt.plot(x, wire, color=colors[key])
+
+    plt.xlabel("Lifetime of the Bond")
+    plt.ylabel("Average Eucl. O-O distance of the HB-Wire")
+    plt.title("Average Hydrogenbond distance")
+    plt.show()
+    return None
+
+def plot_transition_cations(transition_mols: [], ion_ts: [], trj: Trajectory,
+                            reverse=False, fig_size: (int, int)=(8, 6)) -> None:
+    '''
+    Function to plot the HB wire from the H3O+ towards the OH- ion for a given wire.
+    :param wire_list: list of list of ints denoting the O-Atoms of the Molecules involved. one entry for each timestep
+    till the recombination time reach. can contain None if no direct wire exists
+    :param trj: Corresponding Trajectory Object
+    :param plot_hydrogens: Boolean default=False, denotes if only oxygens are plotted for molecule representation
+    :param fig_size: determinse size of plot default 8x6 inches
+    :return:
+    '''
+
+
+    fig = plt.figure(figsize=fig_size)
+    ax_plot = fig.add_axes([0, 0, 1, 0.8], projection="3d")
+    ax_slider = fig.add_axes([0.1, 0.85, 0.8, 0.1])
+    ax_prev = plt.axes([0.05, 0.1, 0.1, 0.04])
+    ax_next = plt.axes([0.05, 0.2, 0.1, 0.04])
+    if not reverse:
+        fig.timestep_text = fig.text(0.1, 0.4,f'H3O-Ion ID {trj.s2[0][ion_ts[0], 0]}',
+                                     ha="center", va="center", fontsize=12, color="blue")
+    if reverse:
+        fig.timestep_text = fig.text(0.1, 0.4,f'OH-Ion ID {trj.s2[0][ion_ts[0], 0]}',
+                                     ha="center", va="center", fontsize=12, color="blue")
+    ax_plot.set_xlim(0, 1)
+    ax_plot.set_ylim(0, 1)
+    ax_plot.set_zlim(0, 1)
+    ax_plot.set_box_aspect([1, 1, 1])
+    #ax_plot.autoscale(enable=False)
+
+    s = Slider(ax=ax_slider, label="Timestep", valmin=0, valmax=len(transition_mols)-1, valinit=0, valfmt="%i")
+    btn_prev = Button(ax_prev, 'Previous')
+    btn_next = Button(ax_next, 'Next')
+
+    def next_frame(event):
+        current_val = int(s.val)
+        if current_val < (len(transition_mols) - 2):
+            s.set_val(current_val + 1)
+
+    def prev_frame(event):
+        current_val = int(s.val)
+        if current_val > 0:
+            s.set_val(current_val - 1)
+
+    def update(val):
+        value = int(s.val)
+        ax_plot.cla()
+        ax_plot.set_title("Transition state Cations")
+        ax_plot.set_xlim(0, 1)
+        ax_plot.set_ylim(0, 1)
+        ax_plot.set_zlim(0, 1)
+        if not reverse:
+            fig.timestep_text.set_text(f'H3O-Ion ID {trj.s2[value][ion_ts[value], 0]}')
+        if reverse:
+            fig.timestep_text.set_text(f'OH-Ion ID {trj.s2[value][ion_ts[value], 0]}')
+
+        if transition_mols[value][0] is not None:
+            for molecule in transition_mols[value]:
+                for h_atom in molecule[:-1]:
+                    ax_plot.scatter(trj.s1[value][h_atom, 2],trj.s1[value][h_atom, 3],
+                                    trj.s1[value][h_atom, 4], marker="o", s=50, c="magenta", label="Oxygen")
+                    ax_plot.plot([trj.s1[value][h_atom, 2], trj.s2[value][molecule[-1], 2]],
+                                 [trj.s1[value][h_atom, 3], trj.s2[value][molecule[-1], 3]],
+                                 [trj.s1[value][h_atom, 4], trj.s2[value][molecule[-1], 4]],
+                                 c="purple", linewidth=2.0, linestyle='dashed')
+                ax_plot.scatter(trj.s2[value][molecule[-1], 2],trj.s2[value][molecule[-1], 3],
+                                trj.s2[value][molecule[-1], 4], marker="o", s=220, c="Orange", label="Hydrogen")
+        else:
+            pass
+
+    s.on_changed(update)
+    btn_next.on_clicked(next_frame)
+    btn_prev.on_clicked(prev_frame)
+
+    update(0)
+    plt.show()
+
     return None
