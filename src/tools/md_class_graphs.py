@@ -380,7 +380,9 @@ def plot_HB_wire(wire_list: [[int]], trj: Trajectory, plot_hydrogens: bool=False
         value = int(s.val)
         ax_plot.cla()
         ax_plot.set_title("Hydrogen Wire between H3O and OH")
-
+        ax_plot.set_xlim(0, 1)
+        ax_plot.set_ylim(0, 1)
+        ax_plot.set_zlim(0, 1)
 
 
         if wire_list[value][0] is not None:

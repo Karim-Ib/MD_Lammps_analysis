@@ -10,19 +10,19 @@ from src.tools.parallel_computations import *
 #plot_rdf_from_file("C:\\Users\\Nutzer\\Documents\\GitHub\\MD_Lammps_analysis_class\\test_results\\rdf_csv", grid=True)
 
 #ts = 15600
-#trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)
-trj = Trajectory('Z:\\cluster_runs\\runs_3\\runs\\recombination_run_3\\trjwater.lammpstrj', scaled=1)
+trj = read_lammps_test(path="recombination_tester.lammpstrj", scaled=0)
+#trj = Trajectory('Z:\\cluster_runs\\runs_3\\runs\\recombination_run_3\\trjwater.lammpstrj', scaled=1)
 #print(trj.did_recombine)
 #bonds_h3, oxygens_h3, ion_ids_h3 = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=False)
 #bonds_oh, oxygens_oh, ion_ids_oh = trj.get_hydrogen_bonds(timestep=ts, cutoff=2.9, starting_oh=True)
 
 
-transition_bonds, transition_mols, ion_ts = get_transition_cations(trj, reverse=True)
-plot_transition_cations(transition_mols,ion_ts, trj, reverse=True)
+transition_bonds, transition_mols, ion_ts = get_transition_cations(trj, reverse=False)
+plot_transition_cations(transition_mols,ion_ts, trj, reverse=False)
 
 
 #last_wire, indices = get_last_wire(trj)
-#all_wire, all_bonds = get_all_wires(trj)
+all_wire, all_bonds = get_all_wires(trj)
 
 '''print(  f'last wire {last_wire}',
       f'indice {indices}')'''
@@ -33,7 +33,7 @@ plot_transition_cations(transition_mols,ion_ts, trj, reverse=True)
 #plot_HB_ratio(timeseries, trj.n_atoms)
 
 #plot_hbond_network(bonds_oh, bonds_h3, trj.s2, (ion_ids_oh[0], ion_ids_oh[1]))
-#plot_HB_wire(all_bonds, trj, plot_hydrogens=True)
+plot_HB_wire(all_bonds, trj, plot_hydrogens=True)
 #plot_HB_timeseries(get_HB_timeseries(trj), trj.s2, plot_oxygen=True)
 #plot_HB_ratio(get_HB_timeseries(trj), trj.n_atoms, apply_smoothing=True, window=15)
 
