@@ -542,3 +542,102 @@ def get_transition_cations(trj: Trajectory, reverse=False) -> ([], [], []):
 
     return timestep_bonds, molecule_list, ion_ts
 
+def diffusion_timestep_tracing(trj: Trajectory)->([int], [int], [int]):
+    '''
+    Method to calculate the timesteps where jumps ocour, ions move thru diffusion and the porticle ID of the
+    Ion Oxygen at each timestep
+    :param trj: Trajectory object
+    :return: lists of ints (diffusion, jumps, h3o_ids_ts)
+    '''
+    h3o_ids_ts = np.empty((trj.recombination_time, ), dtype=int)
+    oh_ids_ts = np.empty((trj.recombination_time, ), dtype=int)
+    for ts in range(trj.recombination_time):
+
+        OH_id = None
+        H3O_id = None
+
+        indexlist_group, _ = trj.get_neighbour_KDT(species_1=trj.s1[ts],
+                                                   species_2=trj.s2[ts], mode="pbc", snapshot=ts)
+
+        temp = [None] * trj.s2[ts].shape[0]
+        for O_atom in range(trj.s2[ts].shape[0]):
+            temp[O_atom] = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+
+        for ind, _list in enumerate(temp):
+            if len(_list) == 2:
+                OH_id = _list[-1]
+            if len(_list) == 4:
+                H3O_id = _list[-1]
+
+        h3o_ids_ts[ts] = trj.s2[ts][H3O_id, 0]
+        oh_ids_ts[ts] = trj.s2[ts][OH_id, 0]
+
+    jumps = []
+    diffusion = []
+    for position_id in range(1, trj.recombination_time):
+        if h3o_ids_ts[position_id-1] != h3o_ids_ts[position_id]:
+            jumps.append(position_id-1)
+        else:
+            diffusion.append(position_id-1)
+
+
+    return diffusion, jumps, h3o_ids_ts
+
+
+def get_diffusion_distance(diffusion: [int], ion_ids: [int], trj: Trajectory)->[float]:
+    '''
+    Function to calculate the diffusion contribution towards the MSD by tracing the H3O+ ion thru the entire trajectory
+    :param diffusion: list of ints giving the timesteps where diffusion movement happens
+    :param ion_ids:  list of ints denoting the particle ID (column 0 of traj.s2) of the H3O Oxygen at each timestep
+    :param trj: Trajectory Object
+    :return: returns list of summed distances for each diffusive part
+    '''
+    coordinates = trj.s2
+    temp = []
+    diffusion_distances = []
+
+    previous = diffusion[0]
+    intervalls = []
+    _temp = []
+
+
+    for diff_ts in range(1, len(diffusion)):
+        #print(previous)
+        if (diffusion[diff_ts] - 1 == previous):
+            _temp.append(previous)
+            previous = diffusion[diff_ts]
+        else:
+            _temp.append(previous)
+            if len(_temp) > 1:
+                intervalls.append(_temp)
+            _temp = []
+            previous = diffusion[diff_ts]
+    print(intervalls)
+    for diffusion_int in intervalls:
+        for diff in range(len(diffusion_int) -1):
+            temp.append(get_distance(coordinates[diffusion_int[diff]][coordinates[diffusion_int[diff]][:, 0]==ion_ids[diffusion_int[diff]], 2:][0],
+                                     coordinates[diffusion_int[diff+1]][coordinates[diffusion_int[diff+1]][:, 0]==ion_ids[diffusion_int[diff+1]], 2:][0],
+                                     mode="pbc"))
+        diffusion_distances.append(sum(temp))
+        temp = []
+    return diffusion_distances
+
+def get_jump_distances(jumps: [int], ion_ids: [int], trj: Trajectory) -> [float]:
+    '''
+    Function to calculate the proton jumping contribution to the H3O MSD
+    :param jumps: timesteps where jumps occur
+    :param ion_ids: list of ints denoting the particle ID (column 0 of traj.s2) of the H3O Oxygen at each timestep
+    :param trj: trajectory object
+    :return: list of floats of the distance covered each jump
+    '''
+
+    coordinates = trj.s2
+    jump_distances = []
+
+    for jump_ts in range(len(jumps)):
+        jump_distances.append(get_distance(coordinates[jumps[jump_ts]][coordinates[jumps[jump_ts]][:, 0] == ion_ids[jumps[jump_ts]], 2:][0],
+                                           coordinates[jumps[jump_ts]-1][coordinates[jumps[jump_ts]-1][:, 0] == ion_ids[jumps[jump_ts]-1], 2:][0],
+                                           mode="pbc"))
+
+    return jump_distances
+

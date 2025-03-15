@@ -541,6 +541,7 @@ def plot_hb_distances(distances: [[int]], fig_size: (int, int)=(8, 6)) -> None:
     plt.show()
     return None
 
+
 def plot_transition_cations(transition_mols: [], ion_ts: [], trj: Trajectory,
                             reverse=False, fig_size: (int, int)=(8, 6)) -> None:
     '''

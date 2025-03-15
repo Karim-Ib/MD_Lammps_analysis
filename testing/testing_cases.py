@@ -30,3 +30,4 @@ def read_lammps_test(path, format="lammpstrj", scaled=1):
 
 def MSD_test(traj: Trajectory) -> np.ndarray:
     return traj.get_MSD()
+
