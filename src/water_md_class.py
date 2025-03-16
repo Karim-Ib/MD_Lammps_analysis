@@ -35,6 +35,7 @@ class Trajectory:
 
         self.file = file
         self.verbosity = verbosity.lower()
+        ### todo:: use enums for comparison
         if format == 'lammpstrj':
             self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np(scaled)
         if format == 'lammps_data':
@@ -54,6 +55,7 @@ class Trajectory:
         self.indexlist = 0
         self.distance = 0
         self.ion_distance = 0
+        self.expanded_system = None
         self.recombination_time, self.did_recombine = self.get_recombination_time()
 
     def xdatcar_to_np(self) -> (np.ndarray, np.ndarray):
@@ -1047,6 +1049,31 @@ class Trajectory:
                                  f' {O_list[O_ind, 1] * self.box_size[snapshot][1]} '
                                  f'{O_list[O_ind, 2] * self.box_size[snapshot][2]}')
                 input_traj.write('\n')
+
+    def expand_system(self, timestep: int=0) -> None:
+        '''Expands a system of molecular coordinates by duplicating it 8 times in space.
+
+        Parameters:
+        coords (numpy.ndarray): Array of shape (N, 5) containing [particle_id, particle_type, x, y, z].
+        box_size (list or tuple): The original box dimensions [x, y, z].
+        '''
+        translations = [
+            (dx * self.box_size[timestep][0], dy * self.box_size[timestep][1], dz * self.box_size[timestep][2])
+            for dx in range(2) for dy in range(2) for dz in range(2)
+        ]
+
+        self.expanded_system = []
+        new_particle_id = 0
+
+        for dx, dy, dz in translations:
+            for row in self.trajectory[0]:
+                particle_id, particle_type, x, y, z = row
+                new_coords = [new_particle_id, particle_type, x + dx, y + dy, z + dz]
+                self.expanded_system.append(new_coords)
+                new_particle_id += 1
+
+        return None
+
 
     def remove_atoms(self, N: int = 1, snap: int = 0, atom_id: int = None, path: str=None, format_out: str = "lammps") -> None:
         '''

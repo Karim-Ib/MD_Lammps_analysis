@@ -54,5 +54,5 @@ gr_oh = (gr_6_oh + gr_9_oh) / 2
 gr_h3 = (gr_6_h3 + gr_9_h3) / 2
 
 '''
-coordinates[diffusion_int[diff]][[coordinates[diffusion_int[diff]][:, 0]]==ion_ids[diffusion_int[diff]], 2:][0]
+
 
