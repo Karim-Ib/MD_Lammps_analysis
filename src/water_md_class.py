@@ -1050,7 +1050,7 @@ class Trajectory:
                                  f'{O_list[O_ind, 2] * self.box_size[snapshot][2]}')
                 input_traj.write('\n')
 
-    def expand_system(self, timestep: int=0) -> None:
+    def expand_system(self, timestep: int=0, remove_ions: bool=True) -> None:
         '''Expands a system of molecular coordinates by duplicating it 8 times in space.
 
         Parameters:
@@ -1064,14 +1064,32 @@ class Trajectory:
 
         self.expanded_system = []
         new_particle_id = 0
+        coordinates = self.trajectory[timestep]
+
+        if remove_ions:
+            indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=timestep)
+            remove_rows = []
+            for O_atom in range(self.s2[timestep].shape[0]):
+                temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+                if len(temp) == 2 or len(temp) == 4:
+                    # add lines with oxygens
+                    remove_rows.append(np.argwhere(self.trajectory[timestep][:, 0] == self.s2[timestep][O_atom,
+                                                                                                        0])[0][0])
+
+                    for h_atom in temp[:-1]:
+                        remove_rows.append(np.argwhere(self.trajectory[timestep][:, 0] == self.s1[timestep][h_atom,
+                                                                                                            0])[0][0])
+                                                                                        # ^this syntax to unpack element
+            coordinates = np.delete(self.trajectory[timestep], remove_rows, axis=0)
 
         for dx, dy, dz in translations:
-            for row in self.trajectory[0]:
+            for row in coordinates:
                 particle_id, particle_type, x, y, z = row
                 new_coords = [new_particle_id, particle_type, x + dx, y + dy, z + dz]
                 self.expanded_system.append(new_coords)
                 new_particle_id += 1
 
+        self.expanded_system = np.array(self.expanded_system)
         return None
 
 
