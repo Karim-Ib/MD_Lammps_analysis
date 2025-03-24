@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import multiprocessing as mp
 from datetime import datetime
+from scipy.spatial import cKDTree
 from typing import List
 from src.water_md_class import Trajectory
 from src.tools.md_class_functions import get_distance, scale_to_box
@@ -22,8 +23,72 @@ def cut_multiple_snaps(trajectory_obj: Trajectory, folder_output: str, snapshot_
         trajectory_obj.cut_snapshot(snap, folder_output)
 
 
+def remove_from_expanded_system(trj: Trajectory, path_save: str, ts: int=0, N: int=0) -> None:
+
+    if trj.expanded_system is None:
+        trj.expand_system(timestep=ts, remove_ions=True)
+
+    expanded_s1 = trj.expanded_system[trj.expanded_system[:, 1] == 1, :]
+    expanded_s2 = trj.expanded_system[trj.expanded_system[:, 1] == 2, :]
+
+    tree = cKDTree(data=expanded_s2[:, 2:],
+                   leafsize=expanded_s2.shape[0], boxsize=trj.expanded_box.reshape(1, -1))
+
+    n_query = expanded_s1.shape[0]
+    ind_out = np.zeros(n_query)
+    dist_out = np.zeros(n_query)
+    for i in range(n_query):
+        dist_out[i], ind_out[i] = tree.query((expanded_s1[i, 2:]).reshape(1, -1) , k=1)
+
+    to_remove_H_ind = np.empty(0, dtype=int)
+    to_remove_O_ind = np.empty(0, dtype=int)
+    atom_id = np.random.choice(len(expanded_s2), size=N, replace=False)
+
+    NN_list = np.rint(ind_out).astype(int)
+
+    for i in range(N):
+        to_remove_H_ind = np.append(to_remove_H_ind, np.argwhere(NN_list == atom_id[i]))
+        to_remove_O_ind = np.append(to_remove_O_ind, NN_list[to_remove_H_ind])
+
+
+    O_list = np.delete(expanded_s2, to_remove_O_ind, axis=0)
+    H_list = np.delete(expanded_s1, to_remove_H_ind, axis=0)
+
+    with open(path_save, "a") as input_traj:
+        input_traj.write('translated LAMMPS data file via gromacsconf\n')
+        input_traj.write('\n')
+        input_traj.write(f'       {trj.expanded_system.shape[0] - 3*N}  atoms\n')
+        input_traj.write('           2  atom types\n')
+        input_traj.write('\n')
+        input_traj.write(f'   0.00000000       {trj.expanded_box[0]}       xlo xhi\n')
+        input_traj.write(f'   0.00000000       {trj.expanded_box[1]}       ylo yhi\n')
+        input_traj.write(f'   0.00000000       {trj.expanded_box[2]}       zlo zhi\n')
+        input_traj.write(f'   0.00000000       0.00000000       0.00000000      xy xz yz\n')
+        input_traj.write('\n')
+        input_traj.write(' Masses\n')
+        input_traj.write('\n')
+        input_traj.write('           1   1.00794005\n')
+        input_traj.write('           2   15.9994001\n')
+        input_traj.write('\n')
+        input_traj.write(' Atoms\n')
+        input_traj.write('\n')
+
+        for H_ind in range(H_list.shape[0]):
+            input_traj.write(f'{H_ind + 1} 1 {H_list[H_ind, 2] }'
+                             f' {H_list[H_ind, 3] } '
+                             f'{H_list[H_ind, 4] }')
+            input_traj.write('\n')
+        for O_ind in range(O_list.shape[0]):
+            input_traj.write(f'{O_ind + 1 + H_list.shape[0]} 2 {O_list[O_ind, 2]}'
+                             f' {O_list[O_ind, 3] } '
+                             f'{O_list[O_ind, 4] }')
+            input_traj.write('\n')
+
+    return None
+
+
 def generate_md_input(folder_input: str, folder_output: str, N_traj: int=1, format_in: str="lammps_data",
-                      is_scaled: int=1) -> None:
+                      is_scaled: int=1, displace_min: float=0.2, displace_max: float=0.4) -> None:
     '''
     Wrapperfunction to call on the trajectory class and create N_traj different input trajectories for md simmulations
     by displacing atoms to create ions from a given water-trajectory.
@@ -41,7 +106,7 @@ def generate_md_input(folder_input: str, folder_output: str, N_traj: int=1, form
     input_files = os.listdir(folder_input)
 
     random_file_id = np.random.randint(0, len(input_files), N_traj)
-    random_displace_distance = np.random.uniform(0.2, 0.4, N_traj)
+    random_displace_distance = np.random.uniform(displace_min, displace_max, N_traj)
 
     for i in range(N_traj):
         traj_temp = Trajectory(folder_input+input_files[random_file_id[i]], format=format_in, scaled=is_scaled)

@@ -56,6 +56,7 @@ class Trajectory:
         self.distance = 0
         self.ion_distance = 0
         self.expanded_system = None
+        self.expanded_box = None
         self.recombination_time, self.did_recombine = self.get_recombination_time()
 
     def xdatcar_to_np(self) -> (np.ndarray, np.ndarray):
@@ -1082,6 +1083,8 @@ class Trajectory:
                                                                                         # ^this syntax to unpack element
             coordinates = np.delete(self.trajectory[timestep], remove_rows, axis=0)
 
+        coordinates[:, 2:] *= self.box_size[timestep]
+
         for dx, dy, dz in translations:
             for row in coordinates:
                 particle_id, particle_type, x, y, z = row
@@ -1090,10 +1093,11 @@ class Trajectory:
                 new_particle_id += 1
 
         self.expanded_system = np.array(self.expanded_system)
+        self.expanded_box = self.box_size[timestep]*2
         return None
 
-
-    def remove_atoms(self, N: int = 1, snap: int = 0, atom_id: int = None, path: str=None, format_out: str = "lammps") -> None:
+    def remove_atoms(self, N: int = 1, snap: int = 0, atom_id: int = None, path: str=None,
+                     format_out: str = "lammps") -> None:
         '''
         Method to remove molecules from a given trajectory. New trajectory will be safed as "reduced_water.format"
         in the current folder. For N=0 this can be used to simply change the format i.e lammps>XDATCAR
