@@ -8,6 +8,84 @@ from typing import List
 from src.water_md_class import Trajectory
 from src.tools.md_class_functions import get_distance, scale_to_box
 
+def fill_OH_ion(folder_input: str=None, folder_output: str=None, is_scaled=0, HOH_angle = 104.5,
+                OH_distance = 0.96) -> None:
+
+    '''
+    function to fill the missing H atom in the OH ion to neutralize it. will result in a charged system
+    :param folder_input: folder with the ion trajectories to neutralize
+    :param folder_output: folder where the systems with only H3O should be saved at
+    :param is_scaled: boolean 1/0 if scaled or not
+    :param HOH_angle: angle for the new water molecule default = 104.5
+    :param OH_distance: distance between the OH oxygen and new Hydrogen default = 0.96A /max(box_size)
+    :return:
+    '''
+
+    input_files = os.listdir(folder_input)
+
+    for key, file in enumerate(input_files):
+        trj_temp = Trajectory(os.path.join(folder_input, file), format="lammps_data", scaled=is_scaled)
+
+        molecules = []
+        indexlist_group, _ = trj_temp.get_neighbour_KDT(mode="pbc", snapshot=0)
+        oh_ind = None
+
+        for O_atom in range(trj_temp.s2[0].shape[0]):
+            temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+            molecules.append(temp)
+            if len(temp) == 2:
+                oh_ind = O_atom
+                break
+
+        #some linalg to ensure proper new H2O molecule
+        O_coordinates = trj_temp.s2[0][oh_ind, 2:]
+        H_coordinates = trj_temp.s1[0][molecules[-1][0], 2:]
+        oh_vector = (H_coordinates - O_coordinates)
+        oh_vector /= np.linalg.norm(oh_vector)
+
+        pos_vec = np.random.rand(3) - 0.5
+        perp_vec = np.cross(oh_vector, pos_vec)
+        perp_vec /= np.linalg.norm(perp_vec)
+
+        angle = np.deg2rad(HOH_angle / 2)
+        h_vec = np.cos(angle) * oh_vector + np.sin(angle) * perp_vec
+
+        OH_distance = OH_distance / np.max(trj_temp.box_size[0])
+        h_pos = O_coordinates + OH_distance * h_vec
+
+        with open(os.path.join(folder_output, file), "a") as input_traj:
+            input_traj.write('translated LAMMPS data file via gromacsconf\n')
+            input_traj.write('\n')
+            input_traj.write(f'       {trj_temp.n_atoms + 1}  atoms\n')
+            input_traj.write('           2  atom types\n')
+            input_traj.write('\n')
+            input_traj.write(f'   0.00000000       {trj_temp.box_size[0][0]}       xlo xhi\n')
+            input_traj.write(f'   0.00000000       {trj_temp.box_size[0][1]}       ylo yhi\n')
+            input_traj.write(f'   0.00000000       {trj_temp.box_size[0][2]}       zlo zhi\n')
+            input_traj.write(f'   0.00000000       0.00000000       0.00000000      xy xz yz\n')
+            input_traj.write('\n')
+            input_traj.write(' Masses\n')
+            input_traj.write('\n')
+            input_traj.write('           1   1.00794005\n')
+            input_traj.write('           2   15.9994001\n')
+            input_traj.write('\n')
+            input_traj.write(' Atoms\n')
+            input_traj.write('\n')
+
+            for H_ind in range(trj_temp.s1[0].shape[0]):
+                input_traj.write(f'{H_ind + 1} 1 {trj_temp.s1[0][H_ind, 2] * trj_temp.box_size[0][0]}'
+                                 f' {trj_temp.s1[0][H_ind, 3] * trj_temp.box_size[0][1]} '
+                                 f'{trj_temp.s1[0][H_ind, 4] * trj_temp.box_size[0][2]}')
+                input_traj.write('\n')
+            input_traj.write(f'{H_ind + 2} 1 {h_pos[0]*trj_temp.box_size[0][0]} {h_pos[1]*trj_temp.box_size[0][1]} {h_pos[2]*trj_temp.box_size[0][2]}')
+            input_traj.write('\n')
+            for O_ind in range(trj_temp.s2[0].shape[0]):
+                input_traj.write(f'{O_ind + 2 + trj_temp.s1[0].shape[0]} 2 {trj_temp.s2[0][O_ind, 2]*trj_temp.box_size[0][0]}'
+                                 f' {trj_temp.s2[0][O_ind, 3]*trj_temp.box_size[0][1]} '
+                                 f'{trj_temp.s2[0][O_ind, 4]*trj_temp.box_size[0][2]}')
+                input_traj.write('\n')
+    return None
+
 
 def cut_multiple_snaps(trajectory_obj: Trajectory, folder_output: str, snapshot_list: list) -> None:
     '''
@@ -19,12 +97,21 @@ def cut_multiple_snaps(trajectory_obj: Trajectory, folder_output: str, snapshot_
     if not os.path.isdir(folder_output):
         os.mkdir(folder_output)
 
-    for snap in snapshot_list:
-        trajectory_obj.cut_snapshot(snap, folder_output)
+    for key, snap in enumerate(snapshot_list):
+        path = f'{folder_output}water_{key}.data'
+        trajectory_obj.cut_snapshot(snap, path)
 
 
 def remove_from_expanded_system(trj: Trajectory, path_save: str, ts: int=0, N: int=0) -> None:
-
+    '''
+    Function to remove Atoms from an expanded system at a single timestep and write it into a file in lammps data
+    format to use as input for a new pure water simulation.
+    :param trj: trajectory object
+    :param path_save: path to save at
+    :param ts: timestep to look at
+    :param N: Number of molecules to remove
+    :return:
+    '''
     if trj.expanded_system is None:
         trj.expand_system(timestep=ts, remove_ions=True)
 
@@ -607,9 +694,10 @@ def get_transition_cations(trj: Trajectory, reverse=False) -> ([], [], []):
 
     return timestep_bonds, molecule_list, ion_ts
 
+
 def diffusion_timestep_tracing(trj: Trajectory)->([int], [int], [int]):
     '''
-    Method to calculate the timesteps where jumps ocour, ions move thru diffusion and the porticle ID of the
+    Method to calculate the timesteps where jumps occur, ions move through diffusion and the particle ID of the
     Ion Oxygen at each timestep
     :param trj: Trajectory object
     :return: lists of ints (diffusion, jumps, h3o_ids_ts)

@@ -117,7 +117,7 @@ class Trajectory:
         Method to parse lammps data-format trajectories
         :return: returns n_dim np array with the trajectory at each snapshot and a list of the current box dimensions
 
-        NOTE: only works for single time-frame for now -> todo make it general, less hacky
+        NOTE: only works for single time-frame for now -> todo make it general, less hacky fix hardcode n_atom!!
         '''
 
         ###find the number of snapshots we have and safe the corresponding line
@@ -143,7 +143,7 @@ class Trajectory:
                     box_dim.append(np.array([float(i) for i in line.split()[:2]]))
 
                 #todo: fix the regexp.match issue between windows and linux
-                n_atoms=384
+                n_atoms=1824
                 if snap > 16 and snap < (16 + n_atoms + 1):
                     atom_list.append(np.array([float(i) for i in line.split()[:5]]))
 
@@ -153,7 +153,7 @@ class Trajectory:
         box_dim = []
         box_dim.append(np.stack(temp))
         temp = atom_list
-        atom_list = np.stack(temp).reshape((1, 384, 5))
+        atom_list = np.stack(temp).reshape((1, n_atoms, 5))
         if self.verbosity == "loud":
             print(atom_list.shape)
 
@@ -1017,7 +1017,7 @@ class Trajectory:
         H_list = H_list[:, 2:]
 
         if path is not None:
-            water_file = path + "traj_cut_out.data"
+            water_file = path
         else:
             water_file = "traj_cut_out.data"
 
