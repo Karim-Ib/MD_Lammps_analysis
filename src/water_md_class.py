@@ -11,7 +11,7 @@ import warnings, os
 from src.tools.md_class_functions import *
 from src.tools.md_class_functions import get_com_dynamic
 
-#testcommit
+
 class Trajectory:
     def __init__(self, file: str, format: str = 'lammpstrj', scaled: int = 1, verbosity: str="silent") -> None:
         '''
