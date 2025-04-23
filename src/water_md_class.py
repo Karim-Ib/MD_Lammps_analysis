@@ -13,7 +13,8 @@ from src.tools.md_class_functions import get_com_dynamic
 
 
 class Trajectory:
-    def __init__(self, file: str, format: str = 'lammpstrj', scaled: int = 1, verbosity: str="silent") -> None:
+    def __init__(self, file: str, save: str=None, format: str = 'lammpstrj', scaled: int = 1,
+                 verbosity: str="silent", batch=True, batch_size=1000) -> None:
         '''
         Class to parse, manipulate and plot the lammps-trajectory objects.
         Initializes with:
@@ -34,15 +35,20 @@ class Trajectory:
         '''
 
         self.file = file
+        self.npz_save = save
         self.verbosity = verbosity.lower()
         ### todo:: use enums for comparison
-        if format == 'lammpstrj':
+        if format == "lammpstrj" and batch == True:
+            self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np_batchwise(self.file, self.npz_save, scaled)
+        elif format == 'lammpstrj' and batch== False:
             self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np(scaled)
-        if format == 'lammps_data':
+        elif format == "numpy_npz":
+            self.trajectory, self.box_dim, self.n_atoms = self.load_from_npz()
+        elif format == 'lammps_data':
             self.trajectory, self.box_dim, self.n_atoms = self.lammps_data_to_np(scaled)
-        if format == 'gromac':
+        elif format == 'gromac':
             self.trajectory, self.box_dim = self.gromac_to_np()
-        if format == 'XDATCAR':
+        elif format == 'XDATCAR':
             self.trajectory, self.box_dim = self.xdatcar_to_np()
         self.n_snapshots = len(self.box_dim)
         self.box_size = 0
@@ -58,6 +64,93 @@ class Trajectory:
         self.expanded_system = None
         self.expanded_box = None
         self.recombination_time, self.did_recombine = self.get_recombination_time()
+
+    def load_from_npz(self):
+        """
+        Load trajectory data from a saved .npz file.
+
+        :return: Tuple of (atom_list, box_dim, n_atoms)
+        """
+        data = np.load(self.npz_save)
+        atom_list = data['atom_list']
+        box_dim = data['box_dim']
+        n_atoms = int(data['n_atoms'])  # Ensure it's an int
+        return atom_list, box_dim, n_atoms
+
+    def lammpstrj_to_np_batchwise(self, file_path, save_path, scal=1, batch_size=1000):
+        atom_list = []
+        box_dim_list = []
+        n_atoms = None
+        current_batch_snapshots = 0
+
+        with open(file_path, 'r') as f:
+            lines = []
+            snapshot = []
+            box_lines = 0
+            temp_box_dim = []
+
+            while True:
+                line = f.readline()
+                if not line:
+                    break  # End of file
+
+                if regex.match(r'ITEM: TIMESTEP', line):
+                    snapshot = []  # Reset snapshot lines
+                    snapshot.append(line)
+                    snapshot.append(f.readline())  # timestep number
+                elif regex.match(r'ITEM: NUMBER OF ATOMS', line):
+                    snapshot.append(line)
+                    num_atoms_line = f.readline()
+                    snapshot.append(num_atoms_line)
+                    if n_atoms is None:
+                        n_atoms = int(num_atoms_line)
+                elif regex.match(r'ITEM: BOX BOUNDS', line):
+                    snapshot.append(line)
+                    for _ in range(3):
+                        bounds = f.readline()
+                        snapshot.append(bounds)
+                        temp_box_dim.append(np.array([float(x) for x in bounds.strip().split()]))
+                elif regex.match(r'ITEM: ATOMS id', line):
+                    snapshot.append(line)
+                    for _ in range(n_atoms):
+                        atom_line = f.readline()
+                        snapshot.append(atom_line)
+
+                    # Now snapshot is complete, process it
+                    snapshot_lines = snapshot
+                    box_dim_list.append(np.stack(temp_box_dim))
+                    temp_box_dim = []
+
+                    atom_lines = snapshot_lines[-n_atoms:]
+                    atom_data = np.array([list(map(float, l.strip().split())) for l in atom_lines])
+                    atom_data = atom_data[:, [0, 1, 2, 3, 4]]  # id, species, x, y, z
+                    atom_list.append(atom_data)
+
+                    current_batch_snapshots += 1
+
+                    if current_batch_snapshots >= batch_size:
+                        print(f"Processed {len(atom_list)} snapshots so far...")
+                        current_batch_snapshots = 0  # Reset batch
+
+            atom_array = np.array(atom_list)
+            box_dim_array = np.array(box_dim_list)
+
+            if scal == 1:
+                coords = atom_array[:, :, 2:]
+                coords[coords >= 1] -= 1
+                coords[coords < 0] += 1
+                atom_array[:, :, 2:] = coords
+
+            print(f"Saving parsed data to {save_path}")
+            np.savez_compressed(
+                save_path,
+                atom_list=atom_array,
+                box_dim=box_dim_array,
+                n_atoms=n_atoms
+            )
+
+            return atom_array, box_dim_array, n_atoms
+
 
     def xdatcar_to_np(self) -> (np.ndarray, np.ndarray):
         '''
