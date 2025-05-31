@@ -14,7 +14,7 @@ from src.tools.md_class_functions import get_com_dynamic
 
 class Trajectory:
     def __init__(self, file: str, save: str=None, format: str = 'lammpstrj', scaled: int = 1,
-                 verbosity: str="silent", batch=True, batch_size=1000) -> None:
+                 verbosity: str="silent", batch: bool=True, batch_size: int=1000) -> None:
         '''
         Class to parse, manipulate and plot the lammps-trajectory objects.
         Initializes with:
@@ -39,8 +39,11 @@ class Trajectory:
         self.verbosity = verbosity.lower()
         ### todo:: use enums for comparison
         if format == "lammpstrj" and batch == True:
-            self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np_batchwise(self.file, self.npz_save, scaled)
-        elif format == 'lammpstrj' and batch== False:
+            self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np_batchwise(self.file,
+                                                                                         self.npz_save,
+                                                                                         scaled,
+                                                                                         batch_size)
+        elif format == 'lammpstrj' and batch == False:
             self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np(scaled)
         elif format == "numpy_npz":
             self.trajectory, self.box_dim, self.n_atoms = self.load_from_npz()
@@ -71,7 +74,7 @@ class Trajectory:
 
         :return: Tuple of (atom_list, box_dim, n_atoms)
         """
-        data = np.load(self.npz_save)
+        data = np.load(self.file)
         atom_list = data['atom_list']
         box_dim = data['box_dim']
         n_atoms = int(data['n_atoms'])  # Ensure it's an int
@@ -140,14 +143,14 @@ class Trajectory:
                 coords[coords >= 1] -= 1
                 coords[coords < 0] += 1
                 atom_array[:, :, 2:] = coords
-
-            print(f"Saving parsed data to {save_path}")
-            np.savez_compressed(
-                save_path,
-                atom_list=atom_array,
-                box_dim=box_dim_array,
-                n_atoms=n_atoms
-            )
+            if self.npz_save is not None:
+                print(f"Saving parsed data to {save_path}")
+                np.savez_compressed(
+                    save_path,
+                    atom_list=atom_array,
+                    box_dim=box_dim_array,
+                    n_atoms=n_atoms
+                )
 
             return atom_array, box_dim_array, n_atoms
 

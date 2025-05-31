@@ -695,7 +695,7 @@ def get_transition_cations(trj: Trajectory, reverse=False) -> ([], [], []):
     return timestep_bonds, molecule_list, ion_ts
 
 
-def diffusion_timestep_tracing(trj: Trajectory)->([int], [int], [int]):
+def diffusion_timestep_tracing(trj: Trajectory, h3o_only: bool=True)->([int], [int], [int]):
     '''
     Method to calculate the timesteps where jumps occur, ions move through diffusion and the particle ID of the
     Ion Oxygen at each timestep
@@ -717,13 +717,15 @@ def diffusion_timestep_tracing(trj: Trajectory)->([int], [int], [int]):
             temp[O_atom] = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
 
         for ind, _list in enumerate(temp):
-            if len(_list) == 2:
-                OH_id = _list[-1]
+            if not h3o_only:
+                if len(_list) == 2:
+                    OH_id = _list[-1]
             if len(_list) == 4:
                 H3O_id = _list[-1]
 
         h3o_ids_ts[ts] = trj.s2[ts][H3O_id, 0]
-        oh_ids_ts[ts] = trj.s2[ts][OH_id, 0]
+        if not h3o_only:
+            oh_ids_ts[ts] = trj.s2[ts][OH_id, 0]
 
     jumps = []
     diffusion = []
