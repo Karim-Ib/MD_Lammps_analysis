@@ -1,3 +1,5 @@
+import gc
+
 import numpy as np
 import matplotlib.pyplot as plt
 import regex
@@ -39,7 +41,7 @@ class Trajectory:
         self.verbosity = verbosity.lower()
         ### todo:: use enums for comparison
         if format == "lammpstrj" and batch == True:
-            self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np_batchwise(self.file,
+            self.trajectory, self.box_dim, self.n_atoms = self.optimized_lammpstrj_to_np(self.file,
                                                                                          self.npz_save,
                                                                                          scaled,
                                                                                          batch_size)
@@ -79,6 +81,82 @@ class Trajectory:
         box_dim = data['box_dim']
         n_atoms = int(data['n_atoms'])  # Ensure it's an int
         return atom_list, box_dim, n_atoms
+
+    def optimized_lammpstrj_to_np(self, file_path, save_path=None, scal=1, batch_size=1000):
+        """
+        Efficiently parse a LAMMPS .lammpstrj file into NumPy arrays with optimizations:
+        - Avoid regex where possible
+        - Use numpy bulk parsing
+        - Reduce Python list overhead
+
+        Parameters:
+            file_path (str): path to the .lammpstrj file
+            save_path (str): path to save .npz file (optional)
+            scal (int): whether to rescale coordinates to [0,1] (default 1)
+            batch_size (int): for progress logging only
+
+        Returns:
+            atom_array: ndarray of shape (snapshots, atoms, 5) with [id, type, x, y, z]
+            box_array: ndarray of shape (snapshots, 3, 2) with box bounds
+            n_atoms: number of atoms per snapshot
+        """
+        atom_list = []
+        box_list = []
+        n_atoms = None
+        snapshot_idx = 0
+
+        with open(file_path, 'r') as f:
+            line = f.readline()
+            while line:
+                if line.startswith("ITEM: TIMESTEP"):
+                    timestep = int(f.readline())
+
+                elif line.startswith("ITEM: NUMBER OF ATOMS"):
+                    n_atoms = int(f.readline())
+
+                elif line.startswith("ITEM: BOX BOUNDS"):
+                    box = [list(map(float, f.readline().split())) for _ in range(3)]
+                    box_list.append(box)
+
+                elif line.startswith("ITEM: ATOMS"):
+                    atom_lines = [f.readline() for _ in range(n_atoms)]
+                    atom_data = np.fromstring(''.join(atom_lines), sep=' ').reshape(n_atoms, -1)
+                    atom_data = atom_data[:, :5]  # id, type, x,y,z
+                    atom_list.append(atom_data)
+
+                    snapshot_idx += 1
+                    if snapshot_idx % batch_size == 0:
+                        print(f"Parsed {snapshot_idx} snapshots...")
+
+                line = f.readline()
+
+        atom_array = np.array(atom_list)
+        del atom_list
+        print(r'Atom list converted into Array, memory  freed up')
+        gc.collect()
+        box_array = np.array(box_list)
+        del box_list
+        gc.collect()
+
+        if scal:
+            for t in range(atom_array.shape[0]):
+                coords = atom_array[t, :, 2:]
+                lower = box_array[t, :, 0]
+                upper = box_array[t, :, 1]
+                box_len = upper - lower
+                coords = (coords - lower) / box_len
+                coords[coords >= 1] -= 1
+                coords[coords < 0] += 1
+                atom_array[t, :, 2:] = coords
+
+        if save_path:
+            print(f"Saving parsed data to {save_path}")
+            np.savez_compressed(save_path,
+                                atom_list=atom_array,
+                                box_dim=box_array,
+                                n_atoms=n_atoms)
+
+        return atom_array, box_array, n_atoms
 
     def lammpstrj_to_np_batchwise(self, file_path, save_path, scal=1, batch_size=1000):
         atom_list = []
