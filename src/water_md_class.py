@@ -16,7 +16,7 @@ from src.tools.rdf_calculations import calculate_rdf
 class Trajectory:
     def __init__(self, file: str, save: str=None, format: str = 'lammpstrj', scaled: int = 1,
                  verbosity: str="silent", batch: bool=True, batch_size: int=1000, lazy_load: bool=True,
-                 snapshot_range: [(int, int)]=None) -> None:
+                 snapshot_range: [(int, int)]=None, cache_ions: bool=True) -> None:
         '''
         Class to parse, manipulate and plot the lammps-trajectory objects.
         Initializes with:
@@ -36,20 +36,12 @@ class Trajectory:
         - TODO:: change scaled to an actual boolean
         '''
 
+        self.scaled = scaled
         self.file = file
         self.npz_save = save
         self.verbosity = verbosity.lower()
         ### todo:: use enums for comparison
-        if format == "lammpstrj" and batch == True:
-            self.trajectory, self.box_dim, self.n_atoms = self.optimized_lammpstrj_to_np(self.file,
-                                                                                         self.npz_save,
-                                                                                         scaled,
-                                                                                         batch_size)
-        elif format == 'lammpstrj' and batch == False:
-            self.trajectory, self.box_dim, self.n_atoms = self.lammpstrj_to_np(scaled)
-        elif format == "numpy_npz":
-            self.trajectory, self.box_dim, self.n_atoms = self.load_from_npz()
-        elif format == 'lammps_data':
+        if format == 'lammps_data':
             self.trajectory, self.box_dim, self.n_atoms = self.lammps_data_to_np(scaled)
         elif format == 'gromac':
             self.trajectory, self.box_dim = self.gromacs_to_np()
@@ -104,8 +96,6 @@ class Trajectory:
         self.box_size = 0
         self.set_box_size()
 
-        #if scaled == 0:
-            #self.set_scale_to_lammps(scaled)
         print('Split species by type')
         start_time = time.time()
         self.s1, self.s2 = self.get_split_species()
@@ -121,6 +111,21 @@ class Trajectory:
         self.recombination_time, self.did_recombine = self.get_recombination_time_binary()
         end_time = time.time()
         print(f'Time required for recombination time {end_time - start_time}')
+        self._ion_indices_cache = None
+        self._ion_cache_valid = False
+        self.cache_ions = cache_ions
+
+        # Automatically identify ions on init if cache_ions=True
+        if self.cache_ions:
+            print('Identifying and caching ion indices...')
+            start_time = time.time()
+            self._identify_and_cache_ions()
+            end_time = time.time()
+            print(f'Ion identification complete: {end_time - start_time:.2f}s')
+            oh_count = np.sum(self._ion_indices_cache[0] != -1)
+            h3o_count = np.sum(self._ion_indices_cache[1] != -1)
+            print(f'  OH⁻ found in {oh_count}/{self.n_snapshots} snapshots')
+            print(f'  H₃O⁺ found in {h3o_count}/{self.n_snapshots} snapshots')
 
     def streaming_lammpstrj_to_hdf5(self, filepath: str, output_hdf5: str,
                                     batch_size: int = 1000, scaled: int = 1,
@@ -423,164 +428,6 @@ class Trajectory:
         """
         self.close_hdf5()
 
-    def load_from_npz(self):
-        """
-        Load trajectory data from a saved .npz file.
-
-        :return: Tuple of (atom_list, box_dim, n_atoms)
-        """
-        data = np.load(self.file)
-        atom_list = data['atom_list']
-        box_dim = data['box_dim']
-        n_atoms = int(data['n_atoms'])  # Ensure it's an int
-        return atom_list, box_dim, n_atoms
-
-    def optimized_lammpstrj_to_np(self, file_path, save_path=None, scal=1, batch_size=1000):
-        """
-        Efficiently parse a LAMMPS .lammpstrj file into NumPy arrays with optimizations.
-        Parameters:
-            file_path (str): path to the .lammpstrj file
-            save_path (str): path to save .npz file (optional)
-            scal (int): whether to rescale coordinates to [0,1] (default 1)
-            batch_size (int): for progress logging only
-
-        Returns:
-            atom_array: ndarray of shape (snapshots, atoms, 5) with [id, type, x, y, z]
-            box_array: ndarray of shape (snapshots, 3, 2) with box bounds
-            n_atoms: number of atoms per snapshot
-        """
-        atom_list = []
-        box_list = []
-        n_atoms = None
-        snapshot_idx = 0
-
-        with open(file_path, 'r') as f:
-            line = f.readline()
-            while line:
-                if line.startswith("ITEM: TIMESTEP"):
-                    timestep = int(f.readline())
-
-                elif line.startswith("ITEM: NUMBER OF ATOMS"):
-                    n_atoms = int(f.readline())
-
-                elif line.startswith("ITEM: BOX BOUNDS"):
-                    box = [list(map(float, f.readline().split())) for _ in range(3)]
-                    box_list.append(box)
-
-                elif line.startswith("ITEM: ATOMS"):
-                    atom_lines = [f.readline() for _ in range(n_atoms)]
-                    atom_data = np.fromstring(''.join(atom_lines), sep=' ').reshape(n_atoms, -1)
-                    atom_data = atom_data[:, :5]  # id, type, x,y,z
-                    atom_list.append(atom_data)
-
-                    snapshot_idx += 1
-                    if snapshot_idx % batch_size == 0:
-                        print(f"Parsed {snapshot_idx} snapshots...")
-
-                line = f.readline()
-
-        atom_array = np.array(atom_list)
-        del atom_list
-        print(r'Atom list converted into Array, memory  freed up')
-        gc.collect()
-        box_array = np.array(box_list)
-        del box_list
-        gc.collect()
-
-        if scal:
-            for t in range(atom_array.shape[0]):
-                coords = atom_array[t, :, 2:]
-                lower = box_array[t, :, 0]
-                upper = box_array[t, :, 1]
-                box_len = upper - lower
-                coords = (coords - lower) / box_len
-                coords[coords >= 1] -= 1
-                coords[coords < 0] += 1
-                atom_array[t, :, 2:] = coords
-
-        if save_path:
-            print(f"Saving parsed data to {save_path}")
-            np.savez_compressed(save_path,
-                                atom_list=atom_array,
-                                box_dim=box_array,
-                                n_atoms=n_atoms)
-
-        return atom_array, box_array, n_atoms
-
-    def lammpstrj_to_np_batchwise(self, file_path, save_path, scal=1, batch_size=1000):
-        atom_list = []
-        box_dim_list = []
-        n_atoms = None
-        current_batch_snapshots = 0
-
-        with open(file_path, 'r') as f:
-            lines = []
-            snapshot = []
-            box_lines = 0
-            temp_box_dim = []
-
-            while True:
-                line = f.readline()
-                if not line:
-                    break  # End of file
-
-                if regex.match(r'ITEM: TIMESTEP', line):
-                    snapshot = []  # Reset snapshot lines
-                    snapshot.append(line)
-                    snapshot.append(f.readline())  # timestep number
-                elif regex.match(r'ITEM: NUMBER OF ATOMS', line):
-                    snapshot.append(line)
-                    num_atoms_line = f.readline()
-                    snapshot.append(num_atoms_line)
-                    if n_atoms is None:
-                        n_atoms = int(num_atoms_line)
-                elif regex.match(r'ITEM: BOX BOUNDS', line):
-                    snapshot.append(line)
-                    for _ in range(3):
-                        bounds = f.readline()
-                        snapshot.append(bounds)
-                        temp_box_dim.append(np.array([float(x) for x in bounds.strip().split()]))
-                elif regex.match(r'ITEM: ATOMS id', line):
-                    snapshot.append(line)
-                    for _ in range(n_atoms):
-                        atom_line = f.readline()
-                        snapshot.append(atom_line)
-
-                    # Now snapshot is complete, process it
-                    snapshot_lines = snapshot
-                    box_dim_list.append(np.stack(temp_box_dim))
-                    temp_box_dim = []
-
-                    atom_lines = snapshot_lines[-n_atoms:]
-                    atom_data = np.array([list(map(float, l.strip().split())) for l in atom_lines])
-                    atom_data = atom_data[:, [0, 1, 2, 3, 4]]  # id, species, x, y, z
-                    atom_list.append(atom_data)
-
-                    current_batch_snapshots += 1
-
-                    if current_batch_snapshots >= batch_size:
-                        print(f"Processed {len(atom_list)} snapshots so far...")
-                        current_batch_snapshots = 0  # Reset batch
-
-            atom_array = np.array(atom_list)
-            box_dim_array = np.array(box_dim_list)
-
-            if scal == 1:
-                coords = atom_array[:, :, 2:]
-                coords[coords >= 1] -= 1
-                coords[coords < 0] += 1
-                atom_array[:, :, 2:] = coords
-            if self.npz_save is not None:
-                print(f"Saving parsed data to {save_path}")
-                np.savez_compressed(
-                    save_path,
-                    atom_list=atom_array,
-                    box_dim=box_dim_array,
-                    n_atoms=n_atoms
-                )
-
-            return atom_array, box_dim_array, n_atoms
-
     def xdatcar_to_np(self) -> (np.ndarray, np.ndarray):
         '''
         Method to parse vasp-xdatcar style formated trajectories
@@ -740,84 +587,6 @@ class Trajectory:
                     break
         return atom_list, box_dim
 
-    def lammpstrj_to_np(self, scal: int = 1) -> (np.ndarray, [np.ndarray], [int]):
-        '''
-        Parser for trajectories of the .lammpstrj format.
-        :param scal: int, decides if data is scaled or not. default yes
-        :return: tuple of atom_list, box_dim and n_atoms
-        '''
-
-        # might be usefull to know total no. of lines later on
-        n_lines = sum(1 for line in open(self.file))
-
-        ###find the number of snapshots we have and safe the corresponding line
-        ###also finds the number of atoms to initialize n_dim array later
-        snap_count = 0
-        box_lines = 0
-        n_atoms = []
-        snap_lines = []
-        box_dim = []
-
-        with open(self.file) as f:
-            for snap, line in enumerate(f):
-                if regex.match('ITEM: ATOMS id', line):
-                    snap_lines.append(snap + 2)
-                    snap_count += 1
-                if regex.match('ITEM: NUMBER OF ATOMS', line):
-                    n_atoms.append(int(next(f)))
-                if box_lines > 0:
-                    box_lines -= 1
-                    box_dim.append(np.array([float(i) for i in line.split()]))
-                if regex.match('ITEM: BOX BOUNDS', line):
-                    box_lines = 3
-
-        # super hacky fix should work for now but todo:better solution
-        n_atoms = n_atoms[0]
-
-        # transform list of box information into useful square data format.
-        n_box = len(box_dim)
-        temp = box_dim
-        box_dim = []
-        for split in range(int(n_box / 3)):
-            box_dim.append(np.stack((temp[(split * 3): (split * 3 + 3)])))
-
-        for key, line in enumerate(snap_lines):
-            snap_lines[key] = line + key
-        ### initialize np.arry of size (no of timesteps, no of atoms, 3d+id+species)
-
-        atom_list = np.zeros((snap_count, n_atoms, 5))
-        ind_list = [np.zeros(0) for _ in range(snap_count)]
-
-        for i in range(snap_count):
-            ind_list[i] = np.arange(snap_lines[i], snap_lines[i] + n_atoms)
-        snap_count = 0
-        line_count = 0
-        with open(self.file) as f:
-            for line_number, line in enumerate(f):
-
-                # if line_number in ind_list[snap_count]:
-                if any(line_number == ind_list[snap_count]):
-                    atom_list[snap_count, line_count, :] = np.array([float(i) for i in line.split()])
-                    line_count += 1
-                if line_count == n_atoms:
-                    snap_count += 1
-                    line_count = 0
-                    if self.verbosity == "loud":
-                        print("Processing Snapshot:" + str(snap_count))
-                if line_number >= ind_list[-1][-1]:
-                    break
-            for line in f:
-                pass
-
-        ##renormalize coordinates using pbc if neccesary
-        if scal == 1:
-            temp = atom_list[:, :, 2:] >= 1
-            atom_list[:, :, 2:][temp] = atom_list[:, :, 2:][temp] - 1
-            temp = atom_list[:, :, 2:] < 0
-            atom_list[:, :, 2:][temp] = atom_list[:, :, 2:][temp] + 1
-
-        return atom_list, box_dim, n_atoms
-
     def set_scale_to_lammps(self, scal: int) -> None:
         '''
         Setter function to scale self.trajectory. Also brings back "out-of-the-box" atoms back into [1, 1, 1]
@@ -845,32 +614,6 @@ class Trajectory:
 
         for i in range(self.n_snapshots):
             self.box_size[i] = abs(self.box_dim[i][:, 0] - self.box_dim[i][:, 1])
-
-    def get_split_species_old(self) -> ([np.ndarray], [np.ndarray]):
-        '''
-        Routine to split a lammpstrj which is formatted as a np.ndim array of the form (n_steps, n_particles, n_cols=5)
-        into its separate particles (assuming Water-Molecules)
-
-        Modified to work with both NumPy arrays and HDF5 datasets (lazy loading).
-
-        :return out_1, out_2: two output lists of 2d numpy arrays, one for each species
-        '''
-        n_snap, n_row, n_col = self.trajectory.shape
-
-        out_1 = [np.zeros(0) for _ in range(n_snap)]
-        out_2 = [np.zeros(0) for _ in range(n_snap)]
-
-        for i in range(n_snap):
-            # FIX: Load snapshot to RAM first (converts HDF5 dataset → NumPy array)
-            # This enables fancy indexing which HDF5 doesn't support directly
-            snapshot = np.array(self.trajectory[i])  # Force load to RAM
-
-            # Now use boolean indexing instead of np.where
-            # This is cleaner and works with NumPy arrays
-            out_1[i] = snapshot[snapshot[:, 1] == 1]  # Hydrogens (type 1)
-            out_2[i] = snapshot[snapshot[:, 1] == 2]  # Oxygens (type 2)
-
-        return out_1, out_2
 
     def get_split_species(self, batch_size=1000):
         """
@@ -938,234 +681,319 @@ class Trajectory:
 
         return s1, s2
 
+    def _identify_and_cache_ions(self):
+        """
+        Identify OH⁻ and H₃O⁺ oxygen indices using optimized get_neighbour_KDT.
+        Now FAST because get_neighbour_KDT is vectorized!
+        """
+        if self._ion_cache_valid and self._ion_indices_cache is not None:
+            return
 
-    def get_neighbour_KDT(self, species_1: np.ndarray = None, species_2: np.ndarray = None, mode: str = 'normal',
-                          snapshot: int = 0) \
-            -> (np.ndarray, np.ndarray):
+        oh_indices = np.full(self.n_snapshots, -1, dtype=np.int32)
+        h3o_indices = np.full(self.n_snapshots, -1, dtype=np.int32)
+
+        search_until = self.recombination_time if self.did_recombine else self.n_snapshots
+        progress_interval = max(1, search_until // 10)
+
+        for i in range(search_until):
+            if self.verbosity == "loud" and i % progress_interval == 0:
+                print(f"  Processing snapshot {i}/{search_until}")
+
+            try:
+                # Use optimized get_neighbour_KDT (now vectorized!)
+                indexlist_group, _ = self.get_neighbour_KDT(
+                    species_1=self.s1[i],
+                    species_2=self.s2[i],
+                    mode="pbc",
+                    snapshot=i
+                )
+
+                # Determine number of oxygens
+                if isinstance(self.s2, list):
+                    n_oxygens = self.s2[i].shape[0]
+                else:
+                    n_oxygens = self.s2.shape[1]
+
+                # Count coordination
+                coordination = np.bincount(indexlist_group.astype(np.int32),
+                                           minlength=n_oxygens)
+
+                # Identify ions
+                oh_mask = (coordination == 1)
+                h3o_mask = (coordination == 3)
+
+                if np.any(oh_mask):
+                    oh_indices[i] = np.where(oh_mask)[0][0]
+                if np.any(h3o_mask):
+                    h3o_indices[i] = np.where(h3o_mask)[0][0]
+
+            except Exception as e:
+                if self.verbosity == "loud":
+                    print(f"  Warning: snapshot {i}: {e}")
+                continue
+
+        self._ion_indices_cache = (oh_indices, h3o_indices)
+        self._ion_cache_valid = True
+
+    def get_ion_indices(self, snapshot=None):
+        """
+        Get cached ion oxygen indices.
+
+        Args:
+            snapshot: If int, returns indices for that specific snapshot
+                     If None, returns arrays for all snapshots
+
+        Returns:
+            If snapshot is int: (oh_id, h3o_id) where -1 means ion not found
+            If snapshot is None: (oh_indices, h3o_indices) arrays
+        """
+        if not self.cache_ions:
+            raise RuntimeError(
+                "Ion indices are not cached. Set cache_ions=True when creating Trajectory."
+            )
+
+        if not self._ion_cache_valid or self._ion_indices_cache is None:
+            self._identify_and_cache_ions()
+
+        oh_indices, h3o_indices = self._ion_indices_cache
+
+        if snapshot is not None:
+            if snapshot < 0 or snapshot >= self.n_snapshots:
+                raise IndexError(f"Snapshot {snapshot} out of range [0, {self.n_snapshots})")
+            return oh_indices[snapshot], h3o_indices[snapshot]
+        else:
+            return oh_indices, h3o_indices
+
+    def invalidate_ion_cache(self):
+        """Invalidate cached ion indices (rare - only if trajectory changes)."""
+        self._ion_cache_valid = False
+        if self.verbosity == "loud":
+            print("Ion cache invalidated")
+
+    def get_neighbour_KDT(self, species_1: np.ndarray = None, species_2: np.ndarray = None,
+                          mode: str = 'normal', snapshot: int = 0) -> (np.ndarray, np.ndarray):
         '''
-        Routine using sklearns implementation of the KDTree datastructure for quick nearestneighbour search in O(log(n))
-        compared to the naive O(N) approach
-        :param species_1: 2D numpy array of the positions of particles from species1 (n_row, (index, species, x, y, z))
-        :param species_2: 2D numpy array of the positions of particles from species2 (n_row, (index, species, x, y, z))
-        :param mode: sets the handling of boundary conditions with default 'normal' meaning no boundary condition
-                    optional mode ['pbc']
-        :param snapshot: specifies which snapshot we are looking at, default value is 0
-        :return: ind_out np.array of the nearest neighbour indices of species1 found in species2, dist_out np.array of
-                the euclidean distance
+        OPTIMIZED: Uses vectorized KDTree query instead of loop.
+
+        Routine using scipy's cKDTree for nearest neighbour search in O(log(n)).
+
+        :param species_1: 2D numpy array of positions (n_row, (index, species, x, y, z))
+        :param species_2: 2D numpy array of positions (n_row, (index, species, x, y, z))
+        :param mode: 'normal' or 'pbc' for periodic boundary conditions
+        :param snapshot: which snapshot we're looking at, default 0
+        :return: (ind_out, dist_out) - indices and distances of nearest neighbors
         '''
 
-        # workaround to set instance attributes as default argument
+        # Set default arguments
         if species_1 is None:
             species_1 = self.s1
         if species_2 is None:
             species_2 = self.s2
-            # if species_1 or species_2 == 0:
-            # raise ValueError('set self.s1 or self.s2 first or pass required arguments')
-        try:
-            if mode == 'normal':
-                tree = cKDTree(data=species_2[:, 2:] * self.box_size[snapshot], leafsize=species_2.shape[0])
-            if mode == 'pbc':
-                tree = cKDTree(data=species_2[:, 2:] * self.box_size[snapshot],
-                               leafsize=species_2.shape[0], boxsize=self.box_size[snapshot])
 
-            n_query = species_1.shape[0]
-            ind_out = np.zeros(n_query)
-            dist_out = np.zeros(n_query)
-            for i in range(n_query):
-                dist_out[i], ind_out[i] = tree.query((species_1[i, 2:] * self.box_size[snapshot]).reshape(1, -1), k=1)
+        try:
+            # ARRAY FORMAT (3D numpy array)
+            # Unscale coordinates: scaled (0-1) → Angstroms
+            o_coords_unscaled = species_2[:, 2:] * self.box_size[snapshot]
+            h_coords_unscaled = species_1[:, 2:] * self.box_size[snapshot]
+
+            # Build KDTree
+            if mode == 'normal':
+                tree = cKDTree(data=o_coords_unscaled, leafsize=species_2.shape[0])
+            elif mode == 'pbc':
+                tree = cKDTree(data=o_coords_unscaled,
+                               leafsize=species_2.shape[0],
+                               boxsize=self.box_size[snapshot])
+            else:
+                raise ValueError(f"mode must be 'normal' or 'pbc', got '{mode}'")
+
+            # OPTIMIZATION: Vectorized query (all atoms at once!)
+            dist_out, ind_out = tree.query(h_coords_unscaled, k=1)
 
         except (AttributeError, TypeError) as error:
+            # LIST FORMAT (HDF5 lazy loading)
             if self.verbosity == "loud":
-                print(f"Warning: Attribute Error occurred(received list instead of numpy array) using {snapshot} snapshot of the list")
+                print(f"Warning: Using list format (snapshot indexing) for snapshot {snapshot}")
+
             species_1 = species_1[snapshot]
             species_2 = species_2[snapshot]
 
-            if mode == 'normal':
-                tree = cKDTree(data=species_2[:, 2:] * (self.box_size[snapshot]).reshape(1, -1),
-                               leafsize=species_2.shape[0])
-            if mode == 'pbc':
-                tree = cKDTree(data=species_2[:, 2:] * (self.box_size[snapshot]).reshape(1, -1),
-                               leafsize=species_2.shape[0], boxsize=self.box_size[snapshot])
+            # Unscale coordinates
+            box = (self.box_size[snapshot]).reshape(1, -1)
+            o_coords_unscaled = species_2[:, 2:] * box
+            h_coords_unscaled = species_1[:, 2:] * box
 
-            n_query = species_1.shape[0]
-            ind_out = np.zeros(n_query)
-            dist_out = np.zeros(n_query)
-            for i in range(n_query):
-                dist_out[i], ind_out[i] = tree.query((species_1[i, 2:]).reshape(1, -1) *
-                                                     (self.box_size[snapshot]).reshape(1, -1), k=1)
+            # Build KDTree
+            if mode == 'normal':
+                tree = cKDTree(data=o_coords_unscaled, leafsize=species_2.shape[0])
+            elif mode == 'pbc':
+                tree = cKDTree(data=o_coords_unscaled,
+                               leafsize=species_2.shape[0],
+                               boxsize=self.box_size[snapshot])
+            else:
+                raise ValueError(f"mode must be 'normal' or 'pbc', got '{mode}'")
+
+            # OPTIMIZATION: Vectorized query
+            dist_out, ind_out = tree.query(h_coords_unscaled, k=1)
 
         return ind_out, dist_out
 
-    def get_neighbour_naive(self, species_1: np.ndarray = None, species_2: np.ndarray = None, mode: str = 'normal',
-                            snapshot: int = 0) \
-            -> (np.ndarray, np.ndarray):
-        '''
-        Naive approach in calculating the nearest neighbour in linear time O(N) no optimizations done!
-        :param species_1: 2D numpy array of the positions of particles from species1 (n_row, (index, species, x, y, z))
-        :param species_2: 2D numpy array of the positions of particles from species2 (n_row, (index, species, x, y, z))
-        :param mode: sets the handling of boundary conditions with default 'normal' meaning no boundary condition
-                    optional mode ['pbc']
-        :param snapshot: specifies which snapshot we are looking at, default value is 0
-        :return: ind_out np.array of the nearest neighbour indices of species1 found in species2, dist_out np.array of
-                the euclidean distance
-        '''
-
-        if species_1 is None:
-            species_1 = self.s1 * self.box_size
-        if species_2 is None:
-            species_2 = self.s2 * self.box_size
-        try:
-            n_row_1 = species_1.shape[0]
-            n_row_2 = species_2.shape[0]
-
-            distance_matrix = np.zeros((n_row_1, n_row_2))
-            distances = np.zeros(n_row_1)
-            index = np.zeros(n_row_1, dtype='int32')
-
-            for H in range(n_row_1):
-                for O in range(n_row_2):
-                    distance_matrix[H, O] = get_distance(species_1[H, 2:], species_2[O, 2:], img=snapshot,
-                                                         box=self.box_size, mode=mode)
-                index[H] = np.argmin(distance_matrix[H, :])
-                distances[H] = distance_matrix[H, index[H]]
-
-        except AttributeError:
-            if self.verbosity == "loud":
-                print(f"Warning: Attribute Error occurred(received list instead of numpy array) using {snapshot} snapshot of the list")
-            species_1 = species_1[snapshot] * self.box_size[snapshot]
-            species_2 = species_2[snapshot] * self.box_size[snapshot]
-            n_row_1 = species_1.shape[0]
-            n_row_2 = species_2.shape[0]
-
-            distance_matrix = np.zeros((n_row_1, n_row_2))
-            distances = np.zeros(n_row_1)
-            index = np.zeros(n_row_1, dtype='int32')
-
-            for H in range(n_row_1):
-                for O in range(n_row_2):
-                    distance_matrix[H, O] = get_distance(species_1[H, 2:], species_2[O, 2:], img=snapshot,
-                                                         box=self.box_size, mode=mode)
-                index[H] = np.argmin(distance_matrix[H, :])
-                distances[H] = distance_matrix[H, index[H]]
-
-        return index, distances
-
     def get_ion_distance(self) -> np.ndarray:
-        '''
-        Method to calculate the euclidean distance between the two ions at each timestep, based on the
-        distance of the OH- , H3O+ Oxygen Atoms.
-        :return: array [n_snap, (x1, y1, z1, x2, y2, z2, distance)]
-        '''
+        """
+        Calculate euclidean distance between OH⁻ and H₃O⁺ ions.
+        Only processes snapshots up to recombination_time.
+        """
+        oh_indices, h3o_indices = self.get_ion_indices()
 
+        # Preallocate for ALL snapshots
         self.ion_distance = np.zeros((self.n_snapshots, 8))
+        self.ion_distance[:, 0] = np.arange(self.n_snapshots)
 
-        for i in range(self.n_snapshots):
+        is_list_format = isinstance(self.s2, list)
+        is_box_list = isinstance(self.box_size, list)
 
-            OH_id = None
-            H3O_id = None
+        # Only process up to recombination_time
+        process_until = self.recombination_time if self.did_recombine else self.n_snapshots
 
-            # note: find nearest O atom for each H atom
-            indexlist_group, _ = self.get_neighbour_KDT(species_1=self.s1[i],
-                                                        species_2=self.s2[i], mode="pbc", snapshot=i)
+        for i in range(process_until):
+            oh_id = oh_indices[i]
+            h3o_id = h3o_indices[i]
 
-            # note: find he  number of  occourence of O atoms for which it is the nearest to an H atom.
-            # -> for H2O each O atom will count twice, for each H3O+ each O atom will count 3 times and so on.
-            temp = [None] * self.s2[i].shape[0]
-            for O_atom in range(self.s2[i].shape[0]):
-                temp[O_atom] = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+            if oh_id == -1 or h3o_id == -1:
+                continue
 
-            # check how often each O atom counted -> molecules formation  OH- = 1 time H3O+  3 Times  H2O 2 times.
-            for ind, _list in enumerate(temp):
-                if len(_list) == 2:
-                    OH_id = _list[-1]
-                if len(_list) == 4:
-                    H3O_id = _list[-1]
+            try:
+                # Get coordinates
+                if is_list_format:
+                    o_coords = self.s2[i][:, 2:]
                 else:
-                    pass
+                    o_coords = self.s2[i, :, 2:]
 
-            if (OH_id is None) or (H3O_id is None):
-                self.ion_distance[i, :] = np.array([i] + [0, 0, 0]
-                                                   + [0, 0, 0] + [0])
-            else:
-                temp = get_distance(self.trajectory[i, OH_id, 2:], self.trajectory[i, H3O_id, 2:], mode="pbc")
+                # Get box
+                if is_box_list:
+                    box = self.box_size[i]
+                else:
+                    box = self.box_size[i] if self.box_size.ndim > 1 else self.box_size
 
-                self.ion_distance[i, :] = np.array([i] + self.trajectory[i, OH_id, 2:].tolist()
-                                                   + self.trajectory[i, H3O_id, 2:].tolist() + [temp])
+                # Unscale positions
+                oh_pos = o_coords[oh_id] * box
+                h3o_pos = o_coords[h3o_id] * box
 
+                # Calculate PBC distance
+                delta = oh_pos - h3o_pos
+                delta -= box * np.round(delta / box)
+                distance = np.linalg.norm(delta)
+
+                # Store results
+                self.ion_distance[i, 1:4] = oh_pos
+                self.ion_distance[i, 4:7] = h3o_pos
+                self.ion_distance[i, 7] = distance
+
+            except Exception as e:
+                if self.verbosity == "loud":
+                    print(f"  Warning: snapshot {i}: {e}")
+                continue
+
+        # After recombination_time, all rows remain zeros (except snapshot_id)
 
         return self.ion_distance
 
-    def get_hydrogen_bonds(self, timestep: int=0, starting_oh: bool=True,
-                           starting_random: bool=False, cutoff: float=3.6) -> []:
-        '''
-        Method to calculate the hydrogen bonded molecules in water.
-        :param timestep: Timestep at which point in the trajectory the bonding gets calculated
-        :param starting_oh: bool default True whether the tree is build starting from OH or H3O Ion
-        :return: list of touples of bonded molecules(ids)
-        '''
+    def get_hydrogen_bonds(self, timestep: int = 0, starting_oh: bool = True,
+                           starting_random: bool = False, cutoff: float = 3.6) -> tuple:
+        """
+        Calculate hydrogen bonded molecules using DFS.
 
-        molecules = []
+        OPTIMIZED: Uses cached ion indices (if available).
+        Otherwise falls back to original ion identification.
+
+        Args:
+            timestep: Snapshot index
+            starting_oh: If True, start DFS from OH⁻, else from H₃O⁺
+            starting_random: If True, start from random molecule
+            cutoff: Max O-O distance for H-bond (Å)
+
+        Returns:
+            tuple: (bonding_list, unique_O_list, (oh_ind, h3o_ind))
+        """
+
+        # Get NN list (NOW FAST with optimized get_neighbour_KDT!)
         indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=timestep)
-        h3o_ind = None
-        oh_ind = None
 
+        # OPTIMIZATION: Use cached ion indices if available
+        if hasattr(self, '_ion_cache_valid') and self._ion_cache_valid:
+            try:
+                oh_ind, h3o_ind = self.get_ion_indices(snapshot=timestep)
+                # Convert -1 (not found) to None
+                if oh_ind == -1:
+                    oh_ind = None
+                if h3o_ind == -1:
+                    h3o_ind = None
+            except:
+                # Cache not available, fall back to original method
+                oh_ind = None
+                h3o_ind = None
+        else:
+            oh_ind = None
+            h3o_ind = None
+
+        # Build molecules list
+        molecules = []
         for O_atom in range(self.s2[timestep].shape[0]):
             temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
             molecules.append(temp)
-            if len(temp) == 4:
-                h3o_ind = O_atom
-            if len(temp) == 2:
-                oh_ind = O_atom
 
+            # Identify ions if not cached
+            if oh_ind is None or h3o_ind is None:
+                if len(temp) == 4:
+                    h3o_ind = O_atom
+                if len(temp) == 2:
+                    oh_ind = O_atom
 
+        # Set root for DFS
         if starting_oh:
             root = oh_ind
-        else:
+        elif not starting_random:
             root = h3o_ind
-        if starting_random:
+        else:
             root = np.random.randint(0, len(molecules))
-            #print(root)
 
+        # DFS algorithm (keep original - already efficient)
         marked = [False] * len(molecules)
         bonding_list = []
         stack = [root]
 
         scale_O = scale_to_box(self.s2[timestep][:, 2:], self.box_size[timestep])
         scale_H = scale_to_box(self.s1[timestep][:, 2:], self.box_size[timestep])
-        #recheck
+
         neighbour_tree = set_ckdtree(scale_O,
                                      n_leaf=self.s2[timestep].shape[0],
                                      box=self.box_size[timestep])
+
         while len(stack) > 0:
             vertex = stack.pop()
 
             if not marked[vertex]:
-                #print(vertex)
-                # gives me the neighbours(O-Atoms=Center of molecule) of the current vertex within a cutoff distance
-                #neighbours = neighbour_tree.query_ball_point(scale_O[vertex], r=cutoff)
                 _, neighbours = neighbour_tree.query(scale_O[vertex, :], k=20, workers=2)
-                #neighbours = neighbour_tree.query_ball_tree()
-                #[1:] to avoid counting current vertex as neighbour
 
                 hbond_neighbours = []
                 for neighbour in neighbours[1:]:
-                    #checks if there are any Hbonds between vertex molecules and neighbourings
-                    is_bonded=check_hbond(scale_O,
-                                    scale_H,
-                                    molecules[vertex],
-                                    molecules[neighbour],
-                                    box=self.box_size[timestep],
-                                    max_distance=cutoff,
-                                          min_angle=150.0)
+                    is_bonded = check_hbond(scale_O,
+                                            scale_H,
+                                            molecules[vertex],
+                                            molecules[neighbour],
+                                            box=self.box_size[timestep],
+                                            max_distance=cutoff,
+                                            min_angle=150.0)
                     if is_bonded:
                         bonding_list.append((vertex, neighbour))
                         hbond_neighbours.append(neighbour)
+
                 marked[vertex] = True
 
                 for water in hbond_neighbours:
                     if not marked[water]:
                         stack.append(water)
 
+        # Extract unique oxygens
         unique_O_list = []
         for pair in bonding_list:
             for O in pair:
@@ -1205,106 +1033,6 @@ class Trajectory:
             recombination_time=self.recombination_time
         )
 
-
-    def get_rdf_rdist(self, snapshot: int=0, gr_type: str="OO", n_bins: int=50, start: float=0.01, stop: float=None,
-                      single_frame=False)-> (np.ndarray, np.ndarray):
-        '''
-        Method to calculate the radial distribution function for a single trajectory. either one frame or average over the
-        entire trajectory. Based on the binning of distances.
-        :param snapshot: Time index incase of single frame
-        :param gr_type: type of the rdf can be "OO", "HH" or "OH" in single frame with the addition of "OH_ion"
-                and "H3O_ion" available only for full trajectories
-        :param n_bins: number of bins
-        :param start: starting distance default =0.01
-        :param stop: end distance defaults to the min(box size)/2
-        :param single_frame: boolean default False
-        :return: g_r and r
-        '''
-        if single_frame:
-            if gr_type=="OH_ion" or gr_type=="H3O_ion":
-                print("Combination of single_frame and Ion RDF is not supported.")
-                return None
-            if gr_type=="OO":
-                gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
-                                       stop=stop)
-                return gr, r
-            if gr_type=="HH":
-                gr, r = calc_rdf_rdist(data=self.s1, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
-                                       stop=stop)
-                return gr, r
-            if gr_type=="OH":
-                gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
-                                       stop=stop, data_2=self.s1[snapshot])
-                return gr, r
-
-        if not single_frame:
-            if gr_type=="OO":
-                rdf_list = np.zeros((self.n_snapshots, n_bins -1))
-                for snap in range(self.n_snapshots):
-
-                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snap, n_bins=n_bins, start=start,
-                                           stop=stop)
-                    rdf_list[snap, :] = gr
-
-                rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
-                return rdf_list, r
-            if gr_type=="HH":
-                rdf_list = np.zeros((self.n_snapshots, n_bins -1))
-                for snap in range(self.n_snapshots ):
-                    gr, r = calc_rdf_rdist(data=self.s1, box=self.box_size, snapshot=snap, n_bins=n_bins, start=start,
-                                           stop=stop)
-                    rdf_list[snap, :] = gr
-
-                rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
-                return rdf_list, r
-            if gr_type=="OH":
-                rdf_list = np.zeros((self.n_snapshots, n_bins -1))
-                for snap in range(self.n_snapshots ):
-                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snapshot, n_bins=n_bins, start=start,
-                                           stop=stop, data_2=self.s1[snap])
-                    rdf_list[snap, :] = gr
-
-
-                rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
-                return rdf_list, r
-
-            if gr_type=="OH_ion":
-                rdf_list = np.zeros((self.recombination_time, n_bins -1))
-                for snap in range(self.recombination_time):
-                    # identify ion at each timestep
-                    indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=snap)
-                    for O_atom in range(self.s2[snap].shape[0]):
-                        temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
-                        if len(temp) == 2:
-                            oh_ind = O_atom
-                            break
-
-                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snap, n_bins=n_bins, start=start,
-                                           stop=stop, data_2=self.s2[snap][oh_ind, :], ion=True)
-                    rdf_list[snap, :] = gr
-
-                rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
-
-                return rdf_list, r
-
-            if gr_type=="H3O_ion":
-                rdf_list = np.zeros((self.recombination_time, n_bins -1))
-                for snap in range(self.recombination_time):
-                    indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=snap)
-                    for O_atom in range(self.s2[snap].shape[0]):
-                        temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
-                        if len(temp) == 4:
-                            h3o_ind = O_atom
-                            break
-
-                    gr, r = calc_rdf_rdist(data=self.s2, box=self.box_size, snapshot=snap, n_bins=n_bins, start=start,
-                                           stop=stop, data_2=self.s2[snap][h3o_ind, :], ion=True)
-                    rdf_list[snap, :] = gr
-
-                rdf_list = np.sum(rdf_list, axis=0) / rdf_list.shape[0]
-                return rdf_list, r
-
-    # todo: move to md_class_graphs
     def plot_water_hist(self, index_list: np.ndarray = None) -> None:
         '''
         Quick Wraperfunction for pyplot to draw a histogram of H-Bond distribution
@@ -1936,37 +1664,70 @@ class Trajectory:
 
         return right, True
 
-    def get_ion_speed(self, dt: float=0.0005) -> (np.ndarray, np.ndarray):
-        '''
-        Method to calculate the speed of the ions at each frame
-        :param dt: time between each snapshot
-        :return: arrays of speeds for each ion
-        '''
+    def get_ion_speed(self, dt: float = 0.0005) -> tuple:
+        """
+        Calculate velocity of ions using cached indices.
+        Only processes up to recombination_time.
+        """
+        oh_indices, h3o_indices = self.get_ion_indices()
+
+        # Already sized to recombination_time in original code
         speed_oh = np.zeros(self.recombination_time - 1)
         speed_h3o = np.zeros(self.recombination_time - 1)
-        com_ions = []
+        com_ions = np.zeros((self.recombination_time, 2, 3))
 
-        for timestep in range(self.recombination_time):
-            indexlist_group, _ = self.get_neighbour_KDT(species_1=self.s1[timestep],
-                                                        species_2=self.s2[timestep], mode="pbc", snapshot=timestep)
+        is_list_format = isinstance(self.s1, list)
+        is_box_list = isinstance(self.box_size, list)
 
-            for O_atom in range(self.s2[timestep].shape[0]):
-                temp = np.append(np.argwhere(indexlist_group == O_atom), O_atom)
+        for t in range(self.recombination_time):
+            oh_id = oh_indices[t]
+            h3o_id = h3o_indices[t]
 
-                if len(temp) == 2:
-                    oh_ion = temp
-                if len(temp) == 4:
-                    h3o_ion = temp
+            if oh_id == -1 or h3o_id == -1:
+                continue
 
-            com_ions.append(get_com_dynamic([oh_ion, h3o_ion], self.s1[timestep], self.s2[timestep]))
+            try:
+                # Use existing get_neighbour_KDT
+                indexlist_group, _ = self.get_neighbour_KDT(species_1=self.s1[t],
+                                                            species_2=self.s2[t],
+                                                            mode="pbc",
+                                                            snapshot=t)
 
-        for timestep in range(1, self.recombination_time):
-            temp = (com_ions[timestep][0] - com_ions[timestep - 1][0]) / dt
-            temp = np.sqrt(sum(temp**2))
-            speed_oh[timestep - 1] = temp
-            temp = (com_ions[timestep][1] - com_ions[timestep - 1][1]) / dt
-            temp = np.sqrt(sum(temp**2))
-            speed_h3o[timestep - 1] = temp
+                # Find H atoms belonging to each ion
+                oh_h_indices = np.where(indexlist_group.astype(np.int32) == oh_id)[0]
+                h3o_h_indices = np.where(indexlist_group.astype(np.int32) == h3o_id)[0]
+
+                oh_molecule = [oh_h_indices.tolist(), oh_id]
+                h3o_molecule = [h3o_h_indices.tolist(), h3o_id]
+
+                # Calculate COM
+                if is_list_format:
+                    coms = get_com_dynamic([oh_molecule, h3o_molecule],
+                                           self.s1[t], self.s2[t])
+                else:
+                    coms = get_com_dynamic([oh_molecule, h3o_molecule],
+                                           self.s1[t], self.s2[t])
+
+                # Get box for unscaling
+                if is_box_list:
+                    box = self.box_size[t]
+                else:
+                    box = self.box_size[t] if self.box_size.ndim > 1 else self.box_size
+
+                # Unscale COM
+                com_ions[t] = coms * box
+
+            except Exception as e:
+                if self.verbosity == "loud":
+                    print(f"  Warning: snapshot {t}: {e}")
+                continue
+
+        # Calculate speeds
+        for t in range(1, self.recombination_time):
+            delta_oh = (com_ions[t, 0] - com_ions[t-1, 0]) / dt
+            delta_h3o = (com_ions[t, 1] - com_ions[t-1, 1]) / dt
+
+            speed_oh[t-1] = np.linalg.norm(delta_oh)
+            speed_h3o[t-1] = np.linalg.norm(delta_h3o)
 
         return speed_oh, speed_h3o
-
