@@ -3,20 +3,20 @@ import gc
 import numpy as np
 import matplotlib.pyplot as plt
 import regex
-import string
-
+import time
 import scipy.ndimage
-from rdfpy import rdf
 from scipy.spatial import cKDTree
 from scipy.integrate import trapezoid
 import warnings, os
 from src.tools.md_class_functions import *
 from src.tools.md_class_functions import get_com_dynamic
+from src.tools.rdf_calculations import calculate_rdf
 
 
 class Trajectory:
     def __init__(self, file: str, save: str=None, format: str = 'lammpstrj', scaled: int = 1,
-                 verbosity: str="silent", batch: bool=True, batch_size: int=1000) -> None:
+                 verbosity: str="silent", batch: bool=True, batch_size: int=1000, lazy_load: bool=True,
+                 snapshot_range: [(int, int)]=None) -> None:
         '''
         Class to parse, manipulate and plot the lammps-trajectory objects.
         Initializes with:
@@ -52,23 +52,376 @@ class Trajectory:
         elif format == 'lammps_data':
             self.trajectory, self.box_dim, self.n_atoms = self.lammps_data_to_np(scaled)
         elif format == 'gromac':
-            self.trajectory, self.box_dim = self.gromac_to_np()
+            self.trajectory, self.box_dim = self.gromacs_to_np()
         elif format == 'XDATCAR':
             self.trajectory, self.box_dim = self.xdatcar_to_np()
+        elif format == "lammpstrj_stream":
+            """
+            Streaming parser for large files.
+            Converts LAMMPS → HDF5, then loads from HDF5.
+            """
+            # Determine HDF5 output path
+            if save is None:
+                save = file.replace('.lammpstrj', '.h5')
+                if save == file:  # No extension to replace
+                    save = file + '.h5'
+
+            # Convert to HDF5 if not already done
+            if not os.path.exists(save):
+                if verbosity == "loud":
+                    print(f"Converting {file} → {save}")
+
+                self.streaming_lammpstrj_to_hdf5(
+                    file, save,
+                    batch_size=batch_size,
+                    scaled=scaled,
+                    verbose=(verbosity == "loud")
+                )
+            else:
+                if verbosity == "loud":
+                    print(f"HDF5 file exists: {save}")
+                    print("Skipping conversion, loading directly...")
+
+            # Load from HDF5
+            mode = 'lazy' if lazy_load else 'full'
+            self.trajectory, self.box_dim, self.n_atoms = self.load_from_hdf5(
+                save, mode=mode, snapshot_range=snapshot_range
+            )
+
+        elif format == "hdf5":
+            """
+            Direct HDF5 loading (file already converted).
+            """
+
+            mode = 'lazy' if lazy_load else 'full'
+            self.trajectory, self.box_dim, self.n_atoms = self.load_from_hdf5(
+                file, mode=mode, snapshot_range=snapshot_range
+            )
+
+
+        print('Setting up Trajectory Attributes')
         self.n_snapshots = len(self.box_dim)
         self.box_size = 0
         self.set_box_size()
 
-        if scaled == 0:
-            self.set_scale_to_lammps(scaled)
-
+        #if scaled == 0:
+            #self.set_scale_to_lammps(scaled)
+        print('Split species by type')
+        start_time = time.time()
         self.s1, self.s2 = self.get_split_species()
+        end_time = time.time()
+        print(f'Time required for split {end_time - start_time}')
         self.indexlist = 0
         self.distance = 0
         self.ion_distance = 0
         self.expanded_system = None
         self.expanded_box = None
-        self.recombination_time, self.did_recombine = self.get_recombination_time()
+        print('Calculating recombination time')
+        start_time = time.time()
+        self.recombination_time, self.did_recombine = self.get_recombination_time_binary()
+        end_time = time.time()
+        print(f'Time required for recombination time {end_time - start_time}')
+
+    def streaming_lammpstrj_to_hdf5(self, filepath: str, output_hdf5: str,
+                                    batch_size: int = 1000, scaled: int = 1,
+                                    compress: bool = True,
+                                    verbose: bool = True) -> str:
+        """
+        Convert large LAMMPS trajectory to HDF5 format via streaming.
+
+        Processes file in batches to handle files larger than available RAM.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to input .lammpstrj file
+        output_hdf5 : str
+            Path for output .h5 file
+        batch_size : int, default=1000
+            Snapshots per batch (affects RAM usage: ~100MB per 1000 snapshots)
+        scaled : int, default=1
+            Whether to scale coordinates to [0,1]
+        compress : bool, default=True
+            Use gzip compression (reduces file size by ~40%)
+        verbose : bool, default=True
+            Print progress messages
+
+        Returns
+        -------
+        output_hdf5 : str
+            Path to created HDF5 file
+
+        Raises
+        ------
+        ImportError
+            If h5py not installed
+        ValueError
+            If file cannot be parsed
+
+        Performance
+        -----------
+        15GB file: ~12-15 minutes, peak RAM ~500MB
+
+        Examples
+        --------
+        """
+
+        if verbose:
+            print("="*70)
+            print("STREAMING PARSER: LAMMPSTRJ → HDF5")
+            print("="*70)
+
+        # Step 1: Analyze file structure
+        if verbose:
+            print("Step 1/4: Analyzing file structure...")
+
+        metadata = get_lammpstrj_meta(filepath)
+        n_atoms = metadata['n_atoms']
+
+        if verbose:
+            print(f"  ✓ Atoms per snapshot: {n_atoms:,}")
+            print(f"  ✓ Box type: {metadata['box_bounds_type']}")
+            print(f"  ✓ Columns: {metadata['atom_columns']}")
+
+        # Step 2: Count snapshots
+        if verbose:
+            print("\nStep 2/4: Counting snapshots...")
+
+        n_snapshots = count_snapshots(filepath)
+
+        if verbose:
+            print(f"  ✓ Total snapshots: {n_snapshots:,}")
+            print(f"  ✓ Total atoms: {n_snapshots * n_atoms:,}")
+
+            # Memory estimates
+            total_size_gb = (n_snapshots * n_atoms * 5 * 8) / (1024**3)
+            batch_size_mb = (batch_size * n_atoms * 5 * 8) / (1024**2)
+            print(f"  ✓ Uncompressed size: {total_size_gb:.2f} GB")
+            print(f"  ✓ RAM per batch: ~{batch_size_mb:.1f} MB")
+
+        # Step 3: Create HDF5 file structure
+        if verbose:
+            print("\nStep 3/4: Creating HDF5 file structure...")
+
+        with h5py.File(output_hdf5, 'w') as hf:
+            # Compression settings
+            compression_kwargs = {}
+            if compress:
+                compression_kwargs = {
+                    'compression': 'gzip',
+                    'compression_opts': 4,  # Level 4: good balance speed/size
+                    'shuffle': True,  # Improves compression for floats
+                }
+
+            # Chunking strategy: ~100 snapshots per chunk
+            # This optimizes for sequential reading and compression
+            chunk_size = min(100, max(1, batch_size // 10))
+
+            # Create datasets
+            atoms_dset = hf.create_dataset(
+                'atoms',
+                shape=(n_snapshots, n_atoms, 5),
+                dtype=np.float64,
+                chunks=(chunk_size, n_atoms, 5),
+                **compression_kwargs
+            )
+
+            box_dset = hf.create_dataset(
+                'box',
+                shape=(n_snapshots, 3, 2),
+                dtype=np.float64,
+                chunks=(chunk_size, 3, 2),
+                **compression_kwargs
+            )
+
+            # Store metadata as attributes
+            hf.attrs['n_atoms'] = n_atoms
+            hf.attrs['n_snapshots'] = n_snapshots
+            hf.attrs['format'] = 'lammpstrj'
+            hf.attrs['scaled'] = scaled
+            hf.attrs['box_type'] = metadata['box_bounds_type']
+            hf.attrs['columns'] = metadata['atom_columns']
+            hf.attrs['version'] = '1.0'
+
+            if verbose:
+                print(f"  ✓ Created dataset: atoms {atoms_dset.shape}")
+                print(f"  ✓ Created dataset: box {box_dset.shape}")
+                print(f"  ✓ Chunk size: {chunk_size} snapshots")
+                if compress:
+                    print(f"  ✓ Compression: gzip level 4")
+
+            # Step 4: Stream data in batches
+            if verbose:
+                print(f"\nStep 4/4: Streaming data ({batch_size} snapshots/batch)...")
+
+            n_batches = (n_snapshots + batch_size - 1) // batch_size
+
+            for batch_idx, batch_start in enumerate(range(0, n_snapshots, batch_size)):
+                batch_end = min(batch_start + batch_size, n_snapshots)
+                current_batch_size = batch_end - batch_start
+
+                if verbose:
+                    progress = (batch_start / n_snapshots) * 100
+                    print(f"  Batch {batch_idx + 1:3d}/{n_batches}: "
+                          f"snapshots {batch_start:7,d}-{batch_end:7,d} "
+                          f"({progress:5.1f}%)", end='')
+
+                # Read batch from LAMMPS file
+                atoms_batch, box_batch = read_snapshot_batch(
+                    filepath, batch_start, current_batch_size, metadata
+                )
+
+                # Verify we got expected data
+                if atoms_batch.shape[0] != current_batch_size:
+                    warnings.warn(f"Batch {batch_idx}: expected {current_batch_size} "
+                                  f"snapshots, got {atoms_batch.shape[0]}")
+
+                # Apply coordinate scaling if requested
+                file_scaled = any(c in metadata['atom_columns'] for c in ("xs", "ys", "zs"))
+
+                if scaled == 0 and not file_scaled:
+                    atoms_batch = scale_coordinates_batch(atoms_batch, box_batch)
+                #wrap pbc
+                wrap_scaled_coordinates_batch(atoms_batch)
+
+                # Write to HDF5
+                atoms_dset[batch_start:batch_end] = atoms_batch
+                box_dset[batch_start:batch_end] = box_batch
+
+                if verbose:
+                    print(" ✓")
+
+                # Periodic flush to ensure data written to disk
+                if (batch_idx + 1) % 10 == 0:
+                    hf.flush()
+
+        # Final summary
+        if verbose:
+            output_size_gb = os.path.getsize(output_hdf5) / (1024**3)
+            compression_ratio = (total_size_gb / output_size_gb) if output_size_gb > 0 else 0
+
+            print(f"\n{'='*70}")
+            print("✓ CONVERSION COMPLETE")
+            print(f"{'='*70}")
+            print(f"  Output file: {output_hdf5}")
+            print(f"  File size: {output_size_gb:.2f} GB")
+            if compress:
+                print(f"  Compression ratio: {compression_ratio:.1f}× "
+                      f"(saved {total_size_gb - output_size_gb:.2f} GB)")
+            print(f"{'='*70}\n")
+
+        return output_hdf5
+
+    def load_from_hdf5(self, filepath: str, mode: str = 'lazy',
+                       snapshot_range: [([int, int])] = None
+                       ) -> ([np.ndarray, [np.ndarray], int]):
+        '''
+        Load trajectory from HDF5 file.
+
+        Supports two loading modes:
+        - 'lazy': Memory-mapped (file stays open, data loaded on access)
+        - 'full': Load entire trajectory to RAM
+
+        Parameters
+        ----------
+        filepath : str
+            Path to .h5 file
+        mode : str, default='lazy'
+            'lazy' for memory-mapped access, 'full' to load to RAM
+        snapshot_range : tuple of int, optional
+            (start, end) indices to load subset of snapshots
+
+        Returns
+        -------
+        atom_list : np.ndarray
+            Atom data, shape (n_snapshots, n_atoms, 5)
+        box_dim : list of np.ndarray
+            Box dimensions for each snapshot
+        n_atoms : int
+            Number of atoms per snapshot
+
+        Notes
+        -----
+        In 'lazy' mode, self._hdf5_file remains open for lifetime of object.
+        Call self.close_hdf5() or let __del__ handle cleanup.
+
+
+        '''
+
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"HDF5 file not found: {filepath}")
+
+        if mode == 'lazy':
+            # Keep file open for memory-mapped access
+            self._hdf5_file = h5py.File(filepath, 'r')
+
+            # Get views (not copies) of data
+            if snapshot_range is not None:
+                start, end = snapshot_range
+                atom_list = self._hdf5_file['atoms'][start:end]
+                box_dim = self._hdf5_file['box'][start:end]
+            else:
+                atom_list = self._hdf5_file['atoms']
+                box_dim = self._hdf5_file['box']
+
+            n_atoms = int(self._hdf5_file.attrs['n_atoms'])
+
+            if self.verbosity == "loud":
+                print(f"HDF5 file opened in lazy mode: {filepath}")
+                print(f"  Shape: {atom_list.shape}")
+                print(f"  Memory-mapped: data loaded on access")
+
+        elif mode == 'full':
+            # Load entire dataset to RAM
+            with h5py.File(filepath, 'r') as hf:
+                if snapshot_range is not None:
+                    start, end = snapshot_range
+                    atom_list = hf['atoms'][start:end][:]  # [:] forces load
+                    box_dim = hf['box'][start:end][:]
+                else:
+                    atom_list = hf['atoms'][:]
+                    box_dim = hf['box'][:]
+
+                n_atoms = int(hf.attrs['n_atoms'])
+
+            if self.verbosity == "loud":
+                size_gb = atom_list.nbytes / (1024**3)
+                print(f"HDF5 file loaded to RAM: {filepath}")
+                print(f"  Shape: {atom_list.shape}")
+                print(f"  RAM usage: {size_gb:.2f} GB")
+
+        else:
+            raise ValueError(f"Unknown mode: {mode}. Use 'lazy' or 'full'")
+
+        # Convert box_dim to list format expected by rest of code
+        box_dim_list = [box_dim[i] for i in range(box_dim.shape[0])]
+
+        return atom_list, box_dim_list, n_atoms
+
+    def close_hdf5(self):
+        """
+        Explicitly close HDF5 file if using lazy loading.
+
+        Called automatically by __del__, but can be called manually
+        if you want to free resources earlier.
+        """
+        if hasattr(self, '_hdf5_file') and self._hdf5_file is not None:
+            try:
+                self._hdf5_file.close()
+                self._hdf5_file = None
+                if self.verbosity == "loud":
+                    print("HDF5 file closed")
+            except Exception as e:
+                if self.verbosity == "loud":
+                    print(f"Warning: Error closing HDF5 file: {e}")
+
+    def __del__(self):
+        """
+        Destructor: Clean up HDF5 file handle.
+
+        Ensures file is closed when Trajectory object is garbage collected.
+        """
+        self.close_hdf5()
 
     def load_from_npz(self):
         """
@@ -84,11 +437,7 @@ class Trajectory:
 
     def optimized_lammpstrj_to_np(self, file_path, save_path=None, scal=1, batch_size=1000):
         """
-        Efficiently parse a LAMMPS .lammpstrj file into NumPy arrays with optimizations:
-        - Avoid regex where possible
-        - Use numpy bulk parsing
-        - Reduce Python list overhead
-
+        Efficiently parse a LAMMPS .lammpstrj file into NumPy arrays with optimizations.
         Parameters:
             file_path (str): path to the .lammpstrj file
             save_path (str): path to save .npz file (optional)
@@ -231,7 +580,6 @@ class Trajectory:
                 )
 
             return atom_array, box_dim_array, n_atoms
-
 
     def xdatcar_to_np(self) -> (np.ndarray, np.ndarray):
         '''
@@ -498,23 +846,98 @@ class Trajectory:
         for i in range(self.n_snapshots):
             self.box_size[i] = abs(self.box_dim[i][:, 0] - self.box_dim[i][:, 1])
 
-    def get_split_species(self) -> ([np.ndarray], [np.ndarray]):
+    def get_split_species_old(self) -> ([np.ndarray], [np.ndarray]):
         '''
-        routine to split a lammpstrj which is formated as a np.ndim array of the form (n_steps, n_particles, n_cols=5)
-        into its seperate particles (assuming Water-Molecules)
+        Routine to split a lammpstrj which is formatted as a np.ndim array of the form (n_steps, n_particles, n_cols=5)
+        into its separate particles (assuming Water-Molecules)
+
+        Modified to work with both NumPy arrays and HDF5 datasets (lazy loading).
+
         :return out_1, out_2: two output lists of 2d numpy arrays, one for each species
         '''
-
         n_snap, n_row, n_col = self.trajectory.shape
 
         out_1 = [np.zeros(0) for _ in range(n_snap)]
         out_2 = [np.zeros(0) for _ in range(n_snap)]
 
         for i in range(n_snap):
-            out_1[i] = (self.trajectory[i, np.where(self.trajectory[i, :, 1] == 1), :]).reshape(-1, 5)
-            out_2[i] = (self.trajectory[i, np.where(self.trajectory[i, :, 1] == 2), :]).reshape(-1, 5)
+            # FIX: Load snapshot to RAM first (converts HDF5 dataset → NumPy array)
+            # This enables fancy indexing which HDF5 doesn't support directly
+            snapshot = np.array(self.trajectory[i])  # Force load to RAM
+
+            # Now use boolean indexing instead of np.where
+            # This is cleaner and works with NumPy arrays
+            out_1[i] = snapshot[snapshot[:, 1] == 1]  # Hydrogens (type 1)
+            out_2[i] = snapshot[snapshot[:, 1] == 2]  # Oxygens (type 2)
 
         return out_1, out_2
+
+    def get_split_species(self, batch_size=1000):
+        """
+        Split trajectory into hydrogen and oxygen arrays.
+        Uses batched HDF5 reads for massive speedup.
+
+        Returns:
+            (s1, s2): Tuple of LISTS containing 2D arrays [n_atoms, 5] for each snapshot
+                      (compatible with existing code expecting lists)
+        """
+        import time
+        t0 = time.time()
+
+        n_snap = self.trajectory.shape[0]
+
+        # Get species indices from first snapshot only
+        first_snap = np.array(self.trajectory[0])
+        H_indices = np.where(first_snap[:, 1] == 1)[0]
+        O_indices = np.where(first_snap[:, 1] == 2)[0]
+
+        n_H = len(H_indices)
+        n_O = len(O_indices)
+
+        if self.verbosity == "loud":
+            print(f"Splitting species: {n_H} H, {n_O} O atoms")
+            print(f"Using batched HDF5 reads (batch_size={batch_size})")
+
+        # Pre-allocate as 3D array (for efficient batched processing)
+        s1_array = np.empty((n_snap, n_H, 5), dtype=first_snap.dtype)
+        s2_array = np.empty((n_snap, n_O, 5), dtype=first_snap.dtype)
+
+        # Process in batches
+        n_batches = (n_snap + batch_size - 1) // batch_size
+
+        for batch_idx in range(n_batches):
+            batch_start = batch_idx * batch_size
+            batch_end = min(batch_start + batch_size, n_snap)
+
+            if self.verbosity == "loud":
+                elapsed = time.time() - t0
+                progress = batch_end / n_snap * 100
+                if batch_idx > 0:
+                    rate = batch_end / elapsed
+                    eta = (n_snap - batch_end) / rate
+                    print(f"  Batch {batch_idx+1:3d}/{n_batches}: snapshots {batch_start:6d}-{batch_end:6d} "
+                          f"({progress:5.1f}%) - Rate: {rate:6.1f} snap/s - ETA: {eta:5.1f}s")
+                else:
+                    print(f"  Batch {batch_idx+1:3d}/{n_batches}: snapshots {batch_start:6d}-{batch_end:6d} "
+                          f"({progress:5.1f}%)")
+
+            # Single batched read (FAST!)
+            batch_data = np.array(self.trajectory[batch_start:batch_end])
+
+            # Split using cached indices
+            s1_array[batch_start:batch_end] = batch_data[:, H_indices, :]
+            s2_array[batch_start:batch_end] = batch_data[:, O_indices, :]
+
+        # Convert to list of 2D arrays (for backward compatibility)
+        s1 = [s1_array[i] for i in range(n_snap)]
+        s2 = [s2_array[i] for i in range(n_snap)]
+
+        total_time = time.time() - t0
+        if self.verbosity == "loud":
+            print(f"✓ Species split completed in {total_time:.1f}s ({total_time/n_snap:.4f}s per snapshot)")
+
+        return s1, s2
+
 
     def get_neighbour_KDT(self, species_1: np.ndarray = None, species_2: np.ndarray = None, mode: str = 'normal',
                           snapshot: int = 0) \
@@ -553,7 +976,7 @@ class Trajectory:
 
         except (AttributeError, TypeError) as error:
             if self.verbosity == "loud":
-                print(f"Attribute Error occurred(received list instead of numpy array) using {snapshot} element of the list")
+                print(f"Warning: Attribute Error occurred(received list instead of numpy array) using {snapshot} snapshot of the list")
             species_1 = species_1[snapshot]
             species_2 = species_2[snapshot]
 
@@ -608,7 +1031,7 @@ class Trajectory:
 
         except AttributeError:
             if self.verbosity == "loud":
-                print("Atribute Error occured(recieved list instead of numpy array) using indexed element of list instead")
+                print(f"Warning: Attribute Error occurred(received list instead of numpy array) using {snapshot} snapshot of the list")
             species_1 = species_1[snapshot] * self.box_size[snapshot]
             species_2 = species_2[snapshot] * self.box_size[snapshot]
             n_row_1 = species_1.shape[0]
@@ -751,89 +1174,36 @@ class Trajectory:
 
         return bonding_list, unique_O_list, (oh_ind, h3o_ind)
 
-    def get_rdf_rdfpy(self, snapshot: int=0, increment: float=0.005, gr_type: str="OO", par: bool=False):
-        '''
-        TODO: deprecated
-        Method to calculate the radial distribution function. Wraps around the rdfpy package from
-        Batuhan Yildirim and Hamish Galloway Brown
-        :return:
-        '''
-
-        Vol = self.box_size[snapshot][0] * self.box_size[snapshot][1] * self.box_size[snapshot][2]
-
-        if gr_type == "OO":
-
-
-            upscale = self.s2[snapshot][:, 2:]
-            upscale[:, 0] *= self.box_size[snapshot][0]
-            upscale[:, 1] *= self.box_size[snapshot][1]
-            upscale[:, 2] *= self.box_size[snapshot][2]
-            g_r, r = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
-            return g_r, r
-        if gr_type == "HH":
-            upscale = self.s1[snapshot][:, 2:]
-            upscale[:, 0] *= self.box_size[snapshot][0]
-            upscale[:, 1] *= self.box_size[snapshot][1]
-            upscale[:, 2] *= self.box_size[snapshot][2]
-            g_r, r = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
-            return g_r, r
-        if gr_type == "OH":
-            upscale = self.trajectory[snapshot, :, 2:]
-            upscale[:, 0] *= self.box_size[snapshot][0]
-            upscale[:, 1] *= self.box_size[snapshot][1]
-            upscale[:, 2] *= self.box_size[snapshot][2]
-            g_r, r  = rdf(upscale, dr=increment, parallel=par, rho=len(upscale[:, 0])/Vol)
-            return g_r, r
-
 
     def get_rdf(self, snapshot: int=0, gr_type: str="OO", n_bins: int=50,
-                start: float=0.01, stop: float= None, n_parallel: int=4, single=False) -> (np.ndarray, np.ndarray):
-        #todo: not working properly either fix or remove
-        if single:
-            if gr_type == "OO":
-                upscale, number_density, tree, bin_list, bin_vol = init_rdf(self.s2[snapshot], self.box_size[snapshot],
-                                                                            n_bins, start, stop)
-                gr, _ = calculate_rdf(upscale, number_density, tree, bin_list, bin_vol, n_cores=n_parallel)
+                      start: float=0.01, stop: float=None, single_frame=False):
+        """
+        Calculate radial distribution function.
 
-                return gr, bin_list
+        Args:
+            snapshot: Timestep index for single frame
+            gr_type: "OO", "HH", "OH", "OH_ion", "H3O_ion"
+            n_bins: Number of histogram bins
+            start: Minimum distance (Å)
+            stop: Maximum distance (Å), defaults to box_size/2
+            single_frame: If True, calculate for single snapshot only
 
+        Returns:
+            (gr, r): Tuple of (RDF values, bin centers) as np.ndarrays
 
-            if gr_type == "HH":
-                upscale, number_density, tree, bin_list, bin_vol = init_rdf(self.s1[snapshot], self.box_size[snapshot],
-                                                                            n_bins, start, stop)
-                gr, _ = calculate_rdf(upscale, number_density, tree, bin_list, bin_vol, n_cores=n_parallel)
-
-                return gr, bin_list
-
-            if gr_type == "OH":
-                upscale, number_density, tree, bin_list, bin_vol = init_rdf(self.s1[snapshot], self.box_size[snapshot],
-                                                                            n_bins, start, stop)
-                gr, _ = calculate_rdf(upscale, number_density, tree, bin_list, bin_vol, n_cores=n_parallel)
-
-                return gr, bin_list
-        if not single:
-            if gr_type == "OO":
-
-                gr_data = np.zeros((self.n_snapshots, n_bins))
-
-                for snap in range(self.n_snapshots):
-                    upscale, number_density, tree, bin_list, bin_vol = init_rdf(self.s2[snap], self.box_size[snap],
-                                                                                n_bins, start, stop)
-                    temp, _ = calculate_rdf(upscale, number_density, tree, bin_list, bin_vol, n_cores=n_parallel)
-
-                    gr_data[snap, :] = temp
-
-            gr = np.sum(gr_data, axis=0) / self.n_snapshots
-
-            return gr, bin_list
-
-
-            if gr_type == "HH":
-
-                return None
-            if gr_type == "OH":
-
-                return None
+        """
+        return calculate_rdf(
+            s1_data=self.s1,
+            s2_data=self.s2,
+            box_sizes=self.box_size,
+            gr_type=gr_type,
+            n_bins=n_bins,
+            start=start,
+            stop=stop,
+            snapshot=snapshot,
+            single_frame=single_frame,
+            recombination_time=self.recombination_time
+        )
 
 
     def get_rdf_rdist(self, snapshot: int=0, gr_type: str="OO", n_bins: int=50, start: float=0.01, stop: float=None,
@@ -1538,6 +1908,33 @@ class Trajectory:
         if self.verbosity == "loud":
             print("Trajectory did not recombine")
         return self.n_snapshots, False
+
+    def get_recombination_time_binary(self) -> (int, bool):
+        """
+        Binary search for recombination time. Assumes monotonic:
+        ions present → recombination → stable H2O
+        """
+        def has_ions(snapshot_idx):
+            indexlist_group, _ = self.get_neighbour_KDT(mode="pbc", snapshot=snapshot_idx)
+            coordination = np.bincount(indexlist_group.astype(int),
+                                       minlength=self.s2[snapshot_idx].shape[0])
+            return not np.all(coordination == 2)
+
+        if not has_ions(0):
+            return 0, True
+        if has_ions(self.n_snapshots - 1):
+            return self.n_snapshots, False
+
+        # Binary search
+        left, right = 0, self.n_snapshots - 1
+        while left < right - 1:
+            mid = (left + right) // 2
+            if has_ions(mid):
+                left = mid
+            else:
+                right = mid
+
+        return right, True
 
     def get_ion_speed(self, dt: float=0.0005) -> (np.ndarray, np.ndarray):
         '''

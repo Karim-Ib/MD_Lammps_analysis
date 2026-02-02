@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Union
 from scipy.spatial import cKDTree
+import h5py
 
 
 def get_distance(x: Union[list, np.ndarray], y: Union[list, np.ndarray], box: []=None, mode: str='normal') -> float:
@@ -585,5 +586,225 @@ def check_hbond(traj_O: np.ndarray, traj_H: np.ndarray, current_mol: [int], neig
         return False
 
 
+def count_snapshots(filepath: str) -> int:
+    '''
+    Fast snapshot counting using binary search for marker.
+    Counts occurrences of "ITEM: TIMESTEP" in file.
+
+    :param filepath: path towards lammpstrj file
+    :return: iint number of snapshots in file
+    '''
+
+    chunk_size = 1024 * 1024
+    search_key = b"ITEM: TIMESTEP"
+    counter = 0
+    overlap_size = len(search_key) - 1
+    previous_chunk_end = b''
+
+    with open(filepath, 'rb') as f:
+        while True:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                break
+            # Combine with previous chunk end to catch markers split across chunks
+            searchable = previous_chunk_end + chunk
+            counter += searchable.count(search_key)
+
+            # Save end of chunk for next iteration
+            previous_chunk_end = chunk[-overlap_size:] if len(chunk) >= overlap_size else chunk
+
+    return counter
 
 
+def get_lammpstrj_meta(filepath: str) -> {}:
+    '''
+    Extract metadata from first snapshot of LAMMPS trajectory.
+    Parses only first snapshot to determine file structure.
+
+    :param filepath: Path to lammpstrj file
+    :return: Metadata dictionary {n_atoms: int, box_bound_type: str, atom_columns: [str]}
+    '''
+    metadata = {
+        'n_atoms': None,
+        'box_bounds_type': None,
+        'atom_columns': None,
+    }
+
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith("ITEM: NUMBER OF ATOMS"):
+                metadata['n_atoms'] = int(f.readline().strip())
+
+            elif line.startswith("ITEM: BOX BOUNDS"):
+                parts = line.split()
+                if 'xy' in parts or 'xz' in parts or 'yz' in parts:
+                    metadata['box_bounds_type'] = 'triclinic'
+                else:
+                    metadata['box_bounds_type'] = 'orthogonal'
+
+            elif line.startswith("ITEM: ATOMS"):
+                metadata['atom_columns'] = line.split()[2:]
+                break
+
+
+    return metadata
+
+def scale_coordinates_batch(atoms_batch: np.ndarray, box_batch: np.ndarray) -> np.ndarray:
+    """
+    Scale coordinates to [0,1] for entire batch at once (vectorized).
+
+    Parameters
+    ----------
+    atoms_batch : np.ndarray, shape (batch_size, n_atoms, 5)
+        Atom data where columns 2:5 are x,y,z coordinates
+    box_batch : np.ndarray, shape (batch_size, 3, 2)
+        Box bounds [dim, (lower, upper)]
+
+    Returns
+    -------
+    atoms_batch : np.ndarray
+        Modified in-place with scaled coordinates
+    """
+    # Extract coordinates (view, not copy)
+    coords = atoms_batch[:, :, 2:5]  # Shape: (batch, atoms, 3)
+
+    # Box dimensions with broadcasting shape
+    lower = box_batch[:, :, 0][:, np.newaxis, :]  # (batch, 1, 3)
+    upper = box_batch[:, :, 1][:, np.newaxis, :]  # (batch, 1, 3)
+    box_len = upper - lower
+
+    # Scale to [0, 1]
+    coords[:] = (coords - lower) / box_len
+
+    # Apply periodic boundary conditions
+    coords[coords >= 1.0] -= 1.0
+    coords[coords < 0.0] += 1.0
+
+    return atoms_batch
+
+
+def read_snapshot_batch(filepath: str, start_idx: int, batch_size: int,
+                        metadata: {}) -> ([np.ndarray, np.ndarray]):
+    """
+    Read a batch of snapshots from LAMMPS trajectory file.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to .lammpstrj file
+    start_idx : int
+        Starting snapshot index (0-based)
+    batch_size : int
+        Number of snapshots to read
+    metadata : dict
+        From parse_lammpstrj_metadata()
+
+    Returns
+    -------
+    atoms_batch : np.ndarray, shape (actual_batch_size, n_atoms, 5)
+        Atom data [id, type, x, y, z]
+    box_batch : np.ndarray, shape (actual_batch_size, 3, 2)
+        Box bounds [[xlo, xhi], [ylo, yhi], [zlo, zhi]]
+
+    Notes
+    -----
+    Returns partial batch if end of file reached.
+    """
+    n_atoms = metadata['n_atoms']
+    lines_per_snapshot = 9 + n_atoms
+
+    # Pre-allocate output arrays
+    atoms_batch = np.zeros((batch_size, n_atoms, 5), dtype=np.float64)
+    box_batch = np.zeros((batch_size, 3, 2), dtype=np.float64)
+
+    with open(filepath, 'r') as f:
+        # Skip to start_idx snapshot
+        lines_to_skip = start_idx * lines_per_snapshot
+
+        # Fast bulk skip using iterator consumption
+        for _ in range(lines_to_skip):
+            try:
+                next(f)
+            except StopIteration:
+                # File smaller than expected
+                return atoms_batch[:0], box_batch[:0]
+
+        # Read batch_size snapshots
+        for snap_idx in range(batch_size):
+            try:
+                # TIMESTEP section (2 lines)
+                line = f.readline()
+                if not line or not line.startswith("ITEM: TIMESTEP"):
+                    # End of file or unexpected format
+                    return atoms_batch[:snap_idx], box_batch[:snap_idx]
+                f.readline()  # timestep number
+
+                # NUMBER OF ATOMS section (2 lines)
+                f.readline()  # "ITEM: NUMBER OF ATOMS"
+                f.readline()  # n_atoms value
+
+                # BOX BOUNDS section (4 lines)
+                f.readline()  # "ITEM: BOX BOUNDS ..."
+                for dim in range(3):
+                    box_line = f.readline().strip().split()
+                    box_batch[snap_idx, dim, 0] = float(box_line[0])  # lower
+                    box_batch[snap_idx, dim, 1] = float(box_line[1])  # upper
+
+                # ATOMS section (header + data)
+                f.readline()  # "ITEM: ATOMS id type xs ys zs ..."
+
+                # Read all atom lines for this snapshot
+                atom_lines = []
+                for _ in range(n_atoms):
+                    atom_line = f.readline()
+                    if not atom_line:
+                        # Unexpected end of file
+                        return atoms_batch[:snap_idx], box_batch[:snap_idx]
+                    atom_lines.append(atom_line)
+
+                # Parse atom data efficiently
+                # Join lines into single string, then parse
+                atom_string = ''.join(atom_lines)
+                atom_data = np.fromstring(atom_string, sep=' ')
+
+                # Reshape and take first 5 columns
+                n_cols = len(atom_data) // n_atoms
+                atom_data = atom_data.reshape(n_atoms, n_cols)
+                atoms_batch[snap_idx] = atom_data[:, :5]
+
+            except (StopIteration, ValueError) as e:
+                # End of file or parsing error
+                return atoms_batch[:snap_idx], box_batch[:snap_idx]
+
+    return atoms_batch, box_batch
+
+
+def get_nearest_neighbors_vectorized(H_positions, O_positions, box_size=None):
+    """
+    Vectorized nearest neighbor search for H-O pairs.
+    Much faster than looping over argwhere.
+
+    Args:
+        H_positions: Hydrogen positions [N_H, 3] (scaled or real)
+        O_positions: Oxygen positions [N_O, 3] (scaled or real)
+        box_size: Box dimensions [3] or None for scaled coords
+
+    Returns:
+        indexlist: Oxygen index for each hydrogen [N_H]
+    """
+    if box_size is None:
+        box_size = np.array([1.0, 1.0, 1.0])
+
+    tree = cKDTree(O_positions, boxsize=box_size)
+    distances, indices = tree.query(H_positions, k=1)
+
+    return indices
+
+def wrap_scaled_coordinates_batch(atoms_batch: np.ndarray,
+                                  coord_slice=slice(2, 5)) -> None:
+    """
+    Wrap already-scaled coordinates into [0,1) using periodic boundaries.
+    Operates in-place.
+    """
+    coords = atoms_batch[:, :, coord_slice]
+    coords[:] = np.mod(coords, 1.0)

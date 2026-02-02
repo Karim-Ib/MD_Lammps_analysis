@@ -620,3 +620,4 @@ def plot_transition_cations(transition_mols: [], ion_ts: [], trj: Trajectory,
     plt.show()
 
     return None
+
