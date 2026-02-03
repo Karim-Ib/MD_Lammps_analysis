@@ -1002,7 +1002,6 @@ class Trajectory:
 
         return bonding_list, unique_O_list, (oh_ind, h3o_ind)
 
-
     def get_rdf(self, snapshot: int=0, gr_type: str="OO", n_bins: int=50,
                       start: float=0.01, stop: float=None, single_frame=False):
         """
@@ -1122,7 +1121,7 @@ class Trajectory:
             distances = []
 
             for i in range(1, len(O_list)):
-                temp = get_distance(reference_O, O_list[i, :])
+                temp = get_distance(reference_O, O_list[i, :], mode='pbc')
 
                 if temp == 0.0:
                     continue
@@ -1213,7 +1212,7 @@ class Trajectory:
                 distances = []
 
                 for i in range(len(O_list)):
-                    temp = get_distance(reference_O, O_list[i, :])
+                    temp = get_distance(reference_O, O_list[i, :], mode="pbc")
 
                     if temp == 0.0:
                         continue
