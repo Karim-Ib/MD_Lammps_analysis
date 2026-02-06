@@ -197,8 +197,6 @@ def generate_md_input(folder_input: str, folder_output: str, N_traj: int=1, form
 
     for i in range(N_traj):
         traj_temp = Trajectory(folder_input+input_files[random_file_id[i]], format=format_in, scaled=is_scaled)
-        traj_temp.s1, traj_temp.s2 = traj_temp.get_split_species()
-        traj_temp.indexlist, _ = traj_temp.get_neighbour_KDT(mode="pbc", snapshot=0)
         traj_temp.get_displace(snapshot=0, id=None, distance=random_displace_distance[i], eps=0.05,
                                path=folder_output+f"{i}_")
 
@@ -737,7 +735,6 @@ def diffusion_timestep_tracing(trj: Trajectory, h3o_only: bool=True)->([int], [i
 
 
     return diffusion, jumps, h3o_ids_ts
-
 
 def get_diffusion_distance(diffusion: [int], ion_ids: [int], trj: Trajectory)->[float]:
     '''
