@@ -1074,291 +1074,171 @@ class Trajectory:
         plt.show()
         return
 
-    def get_displace_old(self, snapshot: int = 0, id: int = None, distance: float = 0.05, eps: float = 0.01,
-                     path: str = None, file_name: str=None, num_traj: int = None):
-        '''
-        Method to generate an ionized watertrajectory by displacing one hydrogen to get H3O/OH
-        :param snapshot: index of the snapshot at which the displacement should happen
-        :param id: id of the reference oxygen if none is given one will be picked at random
-        :param distance: distance to where we want to displace to (searching for an oxygen
-         particle in that radius)
-        :param eps: dr at which we still accept an oxygen
-        :param dp_factor: factor with which the hydrogens coordinates differ to its reference,
-                NOTE will get replaced by a collision detection method
-        :param path: Optional path to safe the file in, otherwise it will be safed in the current directory
-        :param file_name: Optional file name, otherwise it will be called "water.data"
-        :param num_traj: Optional number of different trajectories to be generated
-        :return: trajectory with one Hydrogen displaced
-        '''
-
-        def get_displaced_H(H_displace, H_pair, reference_O):
-            '''
-            helper function to find the coordinates of the displaced H Atom by finding the midpoint between the
-            Bondingatoms of the reference O atom and then mirroring this point in space, while making sure the distance
-            between the displaced H and the reference O is smaller then the distance fo the O to its closest bonding H
-            '''
-
-            minimum_distance = np.min([get_distance(H_pair[0], reference_O), get_distance(H_pair[1], reference_O)])
-            midpoint = (H_pair[0] + H_pair[1]) / 2
-            mid_vector = midpoint - reference_O
-
-            new_H = midpoint - 2 * mid_vector
-            while (get_distance(new_H, reference_O, mode="pbc") < 1.1 * minimum_distance):
-                new_H -= 0.05 * mid_vector
-                if get_distance(new_H, reference_O) >= 1.2 * minimum_distance:
-                    return new_H
-            return new_H
-
-
-        if num_traj is None:
-            if id is None:
-                id = np.random.randint(0, len(self.s2[snapshot]))
-
-            if path is None and file_name is None:
-                water_file = "water.data"
-            if path is not None and file_name is not None:
-                water_file = path + file_name + ".data"
-            if path is None and file_name is not None:
-                water_file = file_name + ".data"
-            if path is not None and file_name is None:
-                water_file = path + "water.data"
-
-            O_list = self.s2[snapshot]
-            H_list = self.s1[snapshot]
-            self.indexlist, _ = self.get_neighbour_KDT(H_list, O_list, mode="pbc", snapshot=snapshot)
-            O_list = O_list[:, 2:]
-            H_list = H_list[:, 2:]
-            reference_O = O_list[id, :]
-            reference_H = H_list[np.argwhere(self.indexlist == id).reshape(-1), :]
-            print(np.argwhere(self.indexlist == id))
-            distances = []
-
-            for i in range(1, len(O_list)):
-                temp = get_distance(reference_O, O_list[i, :], mode='pbc')
-                print(temp)
-                if temp == 0.0:
-                    continue
-                if (temp <= (distance + eps)) and (temp >= (distance - eps)):
-                    displace_H = H_list[np.argwhere(self.indexlist == i)[0], :]
-                    print(displace_H, reference_H, reference_O)
-                    if self.verbosity == "loud":
-                        print("displaced")
-                    displace_H = get_displaced_H(displace_H, reference_H, reference_O)
-                    # O_list = np.delete(O_list, i, axis=0) -> if we want to remove an O (not sure if we do?)
-
-                    # update the hydrogen list with the new displaced coordinates
-                    H_list[np.argwhere(self.indexlist == i)[0], :] = displace_H
-
-                    # renormalize coordinates using pbc if neccesary
-                    temp = H_list[:, :] >= 1
-                    H_list[:, :][temp] = H_list[:, :][temp] - 1
-                    temp = H_list[:, :] < 0
-                    H_list[:, :][temp] = H_list[:, :][temp] + 1
-
-                    with open(water_file, "a") as input_traj:
-                        input_traj.write('translated LAMMPS data file via gromacsconf\n')
-                        input_traj.write('\n')
-                        input_traj.write(f'       {self.n_atoms}  atoms\n')
-                        input_traj.write('           2  atom types\n')
-                        input_traj.write('\n')
-                        input_traj.write(f'   0.00000000       {self.box_size[snapshot][0]}       xlo xhi\n')
-                        input_traj.write(f'   0.00000000       {self.box_size[snapshot][1]}       ylo yhi\n')
-                        input_traj.write(f'   0.00000000       {self.box_size[snapshot][2]}       zlo zhi\n')
-                        input_traj.write(f'   0.00000000       0.00000000       0.00000000      xy xz yz\n')
-                        input_traj.write('\n')
-                        input_traj.write(' Masses\n')
-                        input_traj.write('\n')
-                        input_traj.write('           1   1.00794005\n')
-                        input_traj.write('           2   15.9994001\n')
-                        input_traj.write('\n')
-                        input_traj.write(' Atoms\n')
-                        input_traj.write('\n')
-
-                        for H_ind in range(H_list.shape[0]):
-                            input_traj.write(f'{H_ind + 1} 1 {H_list[H_ind, 0] * self.box_size[snapshot][0]} '
-                                             f'{H_list[H_ind, 1] * self.box_size[snapshot][1]} '
-                                             f'{H_list[H_ind, 2] * self.box_size[snapshot][2]}')
-                            input_traj.write('\n')
-                        for O_ind in range(O_list.shape[0]):
-                            input_traj.write(f'{O_ind + 1 + H_list.shape[0]} 2 '
-                                             f'{O_list[O_ind, 0] * self.box_size[snapshot][0]} '
-                                             f'{O_list[O_ind, 1] * self.box_size[snapshot][1]} '
-                                             f'{O_list[O_ind, 2] * self.box_size[snapshot][2]}')
-                            input_traj.write('\n')
-                    if self.verbosity == "loud":
-                        print(f"trajectory saved under {water_file}")
-                    return None
-
-                else:
-                    distances.append(temp)
-                    if self.verbosity == "loud":
-                        print("distance too far, trying next O")
-
-        if num_traj is not None:
-            if isinstance(num_traj, int):
-                pass
-            else:
-                num_traj = int(num_traj)
-                warnings.warn("num_traj is not an integer, it will be converted. please check format")
-
-            for copy in range(num_traj):
-                print(copy)
-                if id is None:
-                    id = np.random.randint(0, len(self.s2[snapshot]))
-
-                if path is None and file_name is None:
-                    water_file = "water" + "_" + str(copy) + ".data"
-                if path is not None and file_name is not None:
-                    water_file = path + file_name + "_" + str(copy) + ".data"
-                if path is None and file_name is not None:
-                    water_file = file_name + "_" + str(copy) + ".data"
-                if path is not None and file_name is None:
-                    water_file = path + "water" + "_" + str(copy) + ".data"
-
-                O_list = self.s2[snapshot]
-                H_list = self.s1[snapshot]
-                self.indexlist, _ = self.get_neighbour_KDT(H_list, O_list, mode="pbc", snapshot=snapshot)
-                O_list = O_list[:, 2:]
-                H_list = H_list[:, 2:]
-                reference_O = O_list[id, :]
-                reference_H = H_list[np.argwhere(self.indexlist == id).reshape(-1), :]
-                distances = []
-
-                for i in range(len(O_list)):
-                    temp = get_distance(reference_O, O_list[i, :], mode="pbc")
-
-                    if temp == 0.0 or i == id:
-                        continue
-                    if (temp <= distance + eps) and (temp >= distance - eps):
-                        displace_H = H_list[np.argwhere(self.indexlist == i)[0], :]
-
-                        # displace the H towards the reference O
-                        if self.verbosity == "loud":
-                            print("displace")
-                        displace_H = get_displaced_H(displace_H, reference_H, reference_O)
-                        # O_list = np.delete(O_list, i, axis=0) -> if we want to remove an O (not sure if we do?)
-
-                        # update the hydrogen list with the new displaced coordinates
-                        H_list[np.argwhere(self.indexlist == i)[0], :] = displace_H
-
-                        # renormalize coordinates using pbc if neccesary
-                        temp = H_list[:, :] >= 1
-                        H_list[:, :][temp] = H_list[:, :][temp] - 1
-                        temp = H_list[:, :] < 0
-                        H_list[:, :][temp] = H_list[:, :][temp] + 1
-
-
-                        with open(water_file, "a") as input_traj:
-                            input_traj.write('translated LAMMPS data file via gromacsconf\n')
-                            input_traj.write('\n')
-                            input_traj.write(f'       {self.n_atoms}  atoms\n')
-                            input_traj.write('           2  atom types\n')
-                            input_traj.write('\n')
-                            input_traj.write(f'   0.00000000       {self.box_size[snapshot][0]}       xlo xhi\n')
-                            input_traj.write(f'   0.00000000       {self.box_size[snapshot][1]}       ylo yhi\n')
-                            input_traj.write(f'   0.00000000       {self.box_size[snapshot][2]}       zlo zhi\n')
-                            input_traj.write(f'   0.00000000       0.00000000       0.00000000      xy xz yz\n')
-                            input_traj.write('\n')
-                            input_traj.write(' Masses\n')
-                            input_traj.write('\n')
-                            input_traj.write('           1   1.00794005\n')
-                            input_traj.write('           2   15.9994001\n')
-                            input_traj.write('\n')
-                            input_traj.write(' Atoms\n')
-                            input_traj.write('\n')
-
-                            for H_ind in range(H_list.shape[0]):
-                                input_traj.write(f'{H_ind + 1} 1 {H_list[H_ind, 0] * self.box_size[snapshot][0]}'
-                                                 f' {H_list[H_ind, 1] * self.box_size[snapshot][1]}'
-                                                 f' {H_list[H_ind, 2] * self.box_size[snapshot][2]}')
-                                input_traj.write('\n')
-                            for O_ind in range(O_list.shape[0]):
-                                input_traj.write(f'{O_ind + 1 + H_list.shape[0]} 2 '
-                                                 f'{O_list[O_ind, 0] * self.box_size[snapshot][0]} '
-                                                 f'{O_list[O_ind, 1] * self.box_size[snapshot][1]}'
-                                                 f' {O_list[O_ind, 2] * self.box_size[snapshot][2]}')
-                                input_traj.write('\n')
-                        if self.verbosity == "loud":
-                            print(f"trajectory saved as water_{copy}.data")
-                        break
-
-                    else:
-                        distances.append(temp)
-                        if self.verbosity == "loud":
-                            print("distance too far, trying next O")
 
     def get_displace(self, snapshot: int = 0, id: int = None, distance: float = 0.05, eps: float = 0.01,
                      path: str = None, file_name: str = None, num_traj: int = None,
                      overwrite: bool = False, max_retries: int = 10):
         '''
-        Method to generate an ionized water trajectory by displacing one hydrogen to get H3O/OH
+        Method to generate an ionized water trajectory by displacing one hydrogen to get H3O/OH.
+
+        Picks a donor molecule (becomes OH-) and an acceptor molecule (becomes H3O+).
+        One hydrogen is removed from the donor's partner and placed on the acceptor (the
+        reference oxygen) using the acceptor's local geometry to ensure a physically correct
+        H3O+ configuration.
 
         :param snapshot: index of the snapshot at which the displacement should happen
-        :param id: id of the reference oxygen if none is given one will be picked at random
-        :param distance: distance to where we want to displace to (searching for an oxygen
-                         particle in that radius) - in SCALED units (0-1)
-        :param eps: dr at which we still accept an oxygen - in SCALED units
-        :param path: Optional path to save the file in, otherwise saved in current directory
-        :param file_name: Optional file name, otherwise it will be called "water.data"
+        :param id: id of the reference oxygen (acceptor/H3O+). If None, picked at random
+        :param distance: distance to the donor oxygen (in SCALED units, 0-1)
+        :param eps: dr tolerance for partner search (in SCALED units)
+        :param path: Optional output directory path (include trailing separator)
+        :param file_name: Optional file name stem (without .data extension)
         :param num_traj: Optional number of different trajectories to be generated
         :param overwrite: If True, overwrite existing files. If False, raise error if file exists.
-        :param max_retries: Maximum number of attempts to find valid reference oxygen (default=10)
+        :param max_retries: Maximum attempts to find valid reference oxygen (default=10)
         :return: None
         '''
 
-        def get_displaced_H(H_displace, H_pair, reference_O):
-            '''Helper function to calculate displaced H position'''
-            minimum_distance = np.min([get_distance(H_pair[0], reference_O),
-                                       get_distance(H_pair[1], reference_O)])
-            midpoint = (H_pair[0] + H_pair[1]) / 2
-            mid_vector = midpoint - reference_O
+        # ====================================================================
+        # HELPER: PBC-safe coordinate unwrapping
+        # ====================================================================
+        def unwrap_relative(point, reference, box=None):
+            '''
+            Shift `point` to be within half-box of `reference` using minimum image convention.
+            Works in scaled coordinates [0,1] by default (box=[1,1,1]).
+            Returns unwrapped position (may be outside [0,1) — that is intentional).
+            '''
+            if box is None:
+                box = np.array([1.0, 1.0, 1.0])
+            delta = point - reference
+            delta -= box * np.round(delta / box)
+            return reference + delta
 
-            new_H = midpoint - 2 * mid_vector
+        # ====================================================================
+        # HELPER: Compute displaced H position using local acceptor geometry
+        # ====================================================================
+        def get_displaced_H(acceptor_O, acceptor_H_pair, box_size_angstrom,
+                            OH_bond=1.02, HOH_angle=113.0):
+            '''
+            Compute position for the third H on the acceptor oxygen to form H3O+.
 
-            while get_distance(new_H, reference_O, mode="pbc") < 1.1 * minimum_distance:
-                new_H -= 0.05 * mid_vector
-                if get_distance(new_H, reference_O) >= 1.2 * minimum_distance:
-                    return new_H
+            Uses the acceptor's own two bonded H atoms to determine placement:
+            the new H is placed opposite the bisector of the existing H-O-H angle,
+            tilted out of the molecular plane to achieve the target H-O-H angle
+            for the Eigen cation (H3O+).
+
+            All inputs/outputs in SCALED coordinates [0, 1].
+
+            :param acceptor_O: shape (3,), acceptor oxygen position (scaled)
+            :param acceptor_H_pair: shape (2, 3), acceptor's two bonded H positions (scaled)
+            :param box_size_angstrom: shape (3,), box dimensions in Angstroms
+            :param OH_bond: O-H bond length in Angstroms for H3O+ (default 1.02)
+            :param HOH_angle: target H-O-H angle in degrees for H3O+ (default 113.0)
+            :return: shape (3,), new H position in scaled coords, wrapped to [0, 1)
+            '''
+            box = np.array([1.0, 1.0, 1.0])
+
+            # Unwrap both H atoms relative to acceptor O — PBC safe
+            H1 = unwrap_relative(acceptor_H_pair[0], acceptor_O, box)
+            H2 = unwrap_relative(acceptor_H_pair[1], acceptor_O, box)
+
+            # O->H vectors in real space (Angstroms) for proper angle calculation
+            v1_real = (H1 - acceptor_O) * box_size_angstrom
+            v2_real = (H2 - acceptor_O) * box_size_angstrom
+
+            v1_hat = v1_real / np.linalg.norm(v1_real)
+            v2_hat = v2_real / np.linalg.norm(v2_real)
+
+            # Bisector of existing H-O-H angle
+            bisector = v1_hat + v2_hat
+            bisector_norm = np.linalg.norm(bisector)
+
+            if bisector_norm < 1e-10:
+                # Degenerate: H atoms exactly opposite — pick perpendicular direction
+                perp = np.cross(v1_hat, np.array([1.0, 0.0, 0.0]))
+                if np.linalg.norm(perp) < 1e-10:
+                    perp = np.cross(v1_hat, np.array([0.0, 1.0, 0.0]))
+                bisector = perp / np.linalg.norm(perp)
+            else:
+                bisector /= bisector_norm
+
+            # Existing half-angle: angle between v1 and the bisector
+            beta = np.arccos(np.clip(np.dot(v1_hat, bisector), -1.0, 1.0))
+
+            # Out-of-plane tilt angle alpha from the constraint:
+            #   cos(HOH_angle) = -cos(alpha) * cos(beta)
+            # => cos(alpha) = -cos(HOH_angle) / cos(beta)
+            target_rad = np.deg2rad(HOH_angle)
+            cos_alpha = -np.cos(target_rad) / np.cos(beta)
+            cos_alpha = np.clip(cos_alpha, -1.0, 1.0)
+            alpha = np.arccos(cos_alpha)
+
+            # Plane normal of existing H-O-H triangle
+            n_perp = np.cross(v1_hat, v2_hat)
+            n_perp_norm = np.linalg.norm(n_perp)
+
+            if n_perp_norm < 1e-10:
+                # Collinear — fall back to -bisector
+                direction = -bisector
+            else:
+                n_perp /= n_perp_norm
+                direction = -bisector * np.cos(alpha) + n_perp * np.sin(alpha)
+                direction /= np.linalg.norm(direction)
+
+            # Bond length in scaled units (component-wise)
+            displacement_scaled = direction * (OH_bond / box_size_angstrom)
+
+            new_H = acceptor_O + displacement_scaled
+
+            # Wrap into [0, 1) — handles ANY coordinate value
+            new_H = np.mod(new_H, 1.0)
 
             return new_H
 
+        # ====================================================================
+        # HELPER: Write LAMMPS data file
+        # ====================================================================
         def write_lammps_data(water_file, H_list, O_list, box_size, n_atoms, overwrite):
-            '''Helper function to write LAMMPS data file'''
+            '''Write LAMMPS-compatible .data file from scaled coordinates.'''
             if os.path.exists(water_file) and not overwrite:
-                raise FileExistsError(f"File {water_file} already exists. Set overwrite=True to replace it.")
+                raise FileExistsError(f"File {water_file} already exists. "
+                                      f"Set overwrite=True to replace it.")
 
-            with open(water_file, "w") as input_traj:
-                input_traj.write('translated LAMMPS data file via gromacsconf\n')
-                input_traj.write('\n')
-                input_traj.write(f'       {n_atoms}  atoms\n')
-                input_traj.write('           2  atom types\n')
-                input_traj.write('\n')
-                input_traj.write(f'   0.00000000       {box_size[0]}       xlo xhi\n')
-                input_traj.write(f'   0.00000000       {box_size[1]}       ylo yhi\n')
-                input_traj.write(f'   0.00000000       {box_size[2]}       zlo zhi\n')
-                input_traj.write(f'   0.00000000       0.00000000       0.00000000      xy xz yz\n')
-                input_traj.write('\n')
-                input_traj.write(' Masses\n')
-                input_traj.write('\n')
-                input_traj.write('           1   1.00794005\n')
-                input_traj.write('           2   15.9994001\n')
-                input_traj.write('\n')
-                input_traj.write(' Atoms\n')
-                input_traj.write('\n')
+            with open(water_file, "w") as f:
+                f.write('translated LAMMPS data file via gromacsconf\n')
+                f.write('\n')
+                f.write(f'       {n_atoms}  atoms\n')
+                f.write('           2  atom types\n')
+                f.write('\n')
+                f.write(f'   0.00000000       {box_size[0]}       xlo xhi\n')
+                f.write(f'   0.00000000       {box_size[1]}       ylo yhi\n')
+                f.write(f'   0.00000000       {box_size[2]}       zlo zhi\n')
+                f.write(f'   0.00000000       0.00000000       0.00000000      xy xz yz\n')
+                f.write('\n')
+                f.write(' Masses\n')
+                f.write('\n')
+                f.write('           1   1.00794005\n')
+                f.write('           2   15.9994001\n')
+                f.write('\n')
+                f.write(' Atoms\n')
+                f.write('\n')
 
                 for H_ind in range(H_list.shape[0]):
-                    input_traj.write(f'{H_ind + 1} 1 {H_list[H_ind, 0] * box_size[0]} '
-                                     f'{H_list[H_ind, 1] * box_size[1]} '
-                                     f'{H_list[H_ind, 2] * box_size[2]}\n')
+                    f.write(f'{H_ind + 1} 1 '
+                            f'{H_list[H_ind, 0] * box_size[0]} '
+                            f'{H_list[H_ind, 1] * box_size[1]} '
+                            f'{H_list[H_ind, 2] * box_size[2]}\n')
 
                 for O_ind in range(O_list.shape[0]):
-                    input_traj.write(f'{O_ind + 1 + H_list.shape[0]} 2 '
-                                     f'{O_list[O_ind, 0] * box_size[0]} '
-                                     f'{O_list[O_ind, 1] * box_size[1]} '
-                                     f'{O_list[O_ind, 2] * box_size[2]}\n')
+                    f.write(f'{O_ind + 1 + H_list.shape[0]} 2 '
+                            f'{O_list[O_ind, 0] * box_size[0]} '
+                            f'{O_list[O_ind, 1] * box_size[1]} '
+                            f'{O_list[O_ind, 2] * box_size[2]}\n')
 
+        # ====================================================================
+        # HELPER: Validate neighbor list
+        # ====================================================================
         def validate_neighbor_list(indexlist, n_oxygens, verbose=False):
-            '''Check if neighbor list makes sense for pure water'''
+            '''Check neighbor list for proper H2O coordination (each O has exactly 2 H).'''
             coordination = np.bincount(indexlist.astype(int), minlength=n_oxygens)
             valid_oxygens = np.where(coordination == 2)[0]
 
@@ -1369,205 +1249,165 @@ class Trajectory:
 
             return valid_oxygens, coordination
 
-        # ========================================================================
-        # SINGLE TRAJECTORY MODE
-        # ========================================================================
+        # ====================================================================
+        # HELPER: Build output file path from (path, file_name, suffix)
+        # ====================================================================
+        def build_file_path(path, file_name, suffix=""):
+            stem = file_name if file_name is not None else "water"
+            ext = f"{suffix}.data" if suffix else ".data"
+            name = stem + ext
+            if path is not None:
+                return os.path.join(path, name)
+            return name
 
-        if num_traj is None:
-            # Get coordinates
-            O_list = self.s2[snapshot]
-            H_list = self.s1[snapshot]
+        # ====================================================================
+        # HELPER: Core displacement routine (shared by single & multi mode)
+        # ====================================================================
+        def do_displacement(snapshot, current_id, distance, eps, water_file, overwrite):
+            '''
+            Perform the displacement for a single configuration.
 
-            # DEBUG: Print coordinate info
-            if self.verbosity == "loud":
-                print(f"Box size: {self.box_size[snapshot]}")
-                print(f"O coords range: [{O_list[:, 2:].min():.4f}, {O_list[:, 2:].max():.4f}]")
-                print(f"H coords range: [{H_list[:, 2:].min():.4f}, {H_list[:, 2:].max():.4f}]")
+            Returns True if successful, False otherwise.
+            '''
+            # Get fresh copies of coordinates
+            O_raw = self.s2[snapshot]
+            H_raw = self.s1[snapshot]
 
-            # Build neighbor list with CORRECT snapshot parameter
-            self.indexlist, _ = self.get_neighbour_KDT(H_list, O_list, mode="pbc", snapshot=snapshot)
+            # For multi-traj mode we need copies; for single mode the originals
+            # are fine since we return immediately after writing
+            if num_traj is not None:
+                O_raw = O_raw.copy()
+                H_raw = H_raw.copy()
 
-            # Extract xyz coordinates
-            O_list = O_list[:, 2:]
-            H_list = H_list[:, 2:]
+            # Build neighbor list
+            self.indexlist, _ = self.get_neighbour_KDT(
+                H_raw, O_raw, mode="pbc", snapshot=snapshot
+            )
 
-            # Validate neighbor list and get valid oxygens
+            # Extract xyz (columns 2:5 are x,y,z in scaled coords)
+            O_list = O_raw[:, 2:]
+            H_list = H_raw[:, 2:]
+
+            # Validate
             valid_oxygens, coordination = validate_neighbor_list(
-                self.indexlist, len(O_list), verbose=self.verbosity=="loud"
+                self.indexlist, len(O_list), verbose=(self.verbosity == "loud")
             )
 
             if len(valid_oxygens) == 0:
-                raise RuntimeError("No valid H2O molecules found! Neighbor list is completely broken. "
-                                   "Check if coordinates are scaled correctly (is_scaled parameter).")
+                if num_traj is not None:
+                    print(f"WARNING: No valid H2O molecules found, skipping")
+                    return False
+                raise RuntimeError(
+                    "No valid H2O molecules found! Check is_scaled parameter."
+                )
 
-            # Try to find a valid reference oxygen
+            # Resolve reference (acceptor) oxygen
+            ref_id = None
             for attempt in range(max_retries):
-                if id is None or attempt > 0:  # Use random after first failed attempt
-                    current_id = np.random.choice(valid_oxygens)
+                if current_id is None or attempt > 0:
+                    ref_id = np.random.choice(valid_oxygens)
                 else:
-                    current_id = id
-                    if current_id not in valid_oxygens:
-                        print(f"WARNING: Specified oxygen {id} has {coordination[id]} H atoms (expected 2)")
-                        current_id = np.random.choice(valid_oxygens)
-                        print(f"Using random valid oxygen {current_id} instead")
+                    ref_id = current_id
+                    if ref_id not in valid_oxygens:
+                        if self.verbosity == "loud":
+                            print(f"WARNING: Oxygen {current_id} has "
+                                  f"{coordination[current_id]} H (expected 2), "
+                                  f"choosing random")
+                        ref_id = np.random.choice(valid_oxygens)
 
-                reference_O = O_list[current_id, :]
-                reference_H_indices = np.argwhere(self.indexlist == current_id).flatten()
-
-                # This should always pass now since we chose from valid_oxygens
-                if len(reference_H_indices) == 2:
-                    reference_H = H_list[reference_H_indices, :]
+                ref_H_idx = np.argwhere(self.indexlist == ref_id).flatten()
+                if len(ref_H_idx) == 2:
                     break
             else:
-                raise RuntimeError(f"Failed to find valid reference oxygen after {max_retries} attempts")
+                if num_traj is not None:
+                    print(f"WARNING: Failed to find valid reference after "
+                          f"{max_retries} attempts, skipping")
+                    return False
+                raise RuntimeError(
+                    f"Failed to find valid reference oxygen after "
+                    f"{max_retries} attempts"
+                )
+
+            acceptor_O = O_list[ref_id, :]
+            acceptor_H = H_list[ref_H_idx, :]  # shape (2, 3)
 
             if self.verbosity == "loud":
-                print(f"Reference oxygen: {current_id}, H atoms: {reference_H_indices}")
+                print(f"Acceptor (H3O+) oxygen: {ref_id}, H indices: {ref_H_idx}")
 
-            # Determine output file name
-            if path is None and file_name is None:
-                water_file = "water.data"
-            elif path is not None and file_name is not None:
-                water_file = path + file_name + ".data"
-            elif path is None and file_name is not None:
-                water_file = file_name + ".data"
-            else:
-                water_file = path + "water.data"
-
-            # Search for partner oxygen at specified distance
-            partner_found = False
-
-            for i in valid_oxygens:  # Only search valid oxygens!
-                if i == current_id:
+            # Search for donor (partner) oxygen at target distance
+            for i in valid_oxygens:
+                if i == ref_id:
                     continue
 
-                temp = get_distance(reference_O, O_list[i, :], mode='pbc')
+                d = get_distance(acceptor_O, O_list[i, :], mode='pbc')
 
-                if temp == 0.0:
+                if d == 0.0:
                     continue
 
-                if (temp <= (distance + eps)) and (temp >= (distance - eps)):
+                if (distance - eps) <= d <= (distance + eps):
                     if self.verbosity == "loud":
-                        print(f"Found valid partner: oxygen {i} at distance {temp:.4f}")
+                        print(f"Donor (OH-) oxygen: {i} at distance {d:.4f}")
 
-                    partner_H_indices = np.argwhere(self.indexlist == i).flatten()
-                    displace_H = H_list[partner_H_indices[0], :]
+                    # Pick one H from the donor to move
+                    donor_H_idx = np.argwhere(self.indexlist == i).flatten()
+                    h_to_move = donor_H_idx[0]
 
-                    displace_H = get_displaced_H(displace_H, reference_H, reference_O)
-                    H_list[partner_H_indices[0], :] = displace_H
+                    # Compute new position using acceptor's local geometry
+                    new_H_pos = get_displaced_H(
+                        acceptor_O, acceptor_H,
+                        np.array(self.box_size[snapshot])
+                    )
 
-                    H_list[H_list >= 1] -= 1
-                    H_list[H_list < 0] += 1
+                    # Place the moved H at its new position
+                    H_list[h_to_move, :] = new_H_pos
 
-                    write_lammps_data(water_file, H_list, O_list, self.box_size[snapshot],
-                                      self.n_atoms, overwrite)
+                    # Wrap all H coordinates into [0, 1)
+                    H_list[:] = np.mod(H_list, 1.0)
+
+                    # Write output
+                    write_lammps_data(
+                        water_file, H_list, O_list,
+                        self.box_size[snapshot], self.n_atoms, overwrite
+                    )
 
                     if self.verbosity == "loud":
                         print(f"Trajectory saved to {water_file}")
 
-                    partner_found = True
-                    return None
+                    return True
 
-            if not partner_found:
-                print(f"WARNING: No valid partner found at distance {distance}±{eps}")
+            # No partner found
+            if self.verbosity == "loud":
+                print(f"WARNING: No valid partner found at distance "
+                      f"{distance}±{eps}")
                 print(f"Searched {len(valid_oxygens)} valid H2O molecules")
-                return None
 
-        # ========================================================================
-        # MULTIPLE TRAJECTORY MODE
-        # ========================================================================
+            return False
 
-        else:
-            if not isinstance(num_traj, int):
-                num_traj = int(num_traj)
-                print("WARNING: num_traj converted to integer")
-
-            successful_count = 0
-
-            for copy in range(num_traj):
-                # Get fresh coordinates
-                O_list = self.s2[snapshot].copy()
-                H_list = self.s1[snapshot].copy()
-
-                # Build neighbor list
-                self.indexlist, _ = self.get_neighbour_KDT(H_list, O_list, mode="pbc", snapshot=snapshot)
-
-                # Extract xyz
-                O_list = O_list[:, 2:]
-                H_list = H_list[:, 2:]
-
-                # Validate and get valid oxygens
-                valid_oxygens, coordination = validate_neighbor_list(self.indexlist, len(O_list))
-
-                if len(valid_oxygens) == 0:
-                    print(f"WARNING: Trajectory {copy}: No valid H2O molecules found, skipping")
-                    continue
-
-                # Try to find valid reference
-                current_id = None
-                for attempt in range(max_retries):
-                    if id is None or attempt > 0:
-                        current_id = np.random.choice(valid_oxygens)
-                    else:
-                        current_id = id if id in valid_oxygens else np.random.choice(valid_oxygens)
-
-                    reference_H_indices = np.argwhere(self.indexlist == current_id).flatten()
-                    if len(reference_H_indices) == 2:
-                        break
-                else:
-                    print(f"WARNING: Trajectory {copy}: Failed to find valid reference, skipping")
-                    continue
-
-                reference_O = O_list[current_id, :]
-                reference_H = H_list[reference_H_indices, :]
-
-                # Determine output file name
-                if path is None and file_name is None:
-                    water_file = f"water_{copy}.data"
-                elif path is not None and file_name is not None:
-                    water_file = path + file_name + f"_{copy}.data"
-                elif path is None and file_name is not None:
-                    water_file = file_name + f"_{copy}.data"
-                else:
-                    water_file = path + f"water_{copy}.data"
-
-                # Search for partner
-                partner_found = False
-
-                for i in valid_oxygens:
-                    if i == current_id:
-                        continue
-
-                    temp = get_distance(reference_O, O_list[i, :], mode="pbc")
-
-                    if temp == 0.0:
-                        continue
-
-                    if (temp <= (distance + eps)) and (temp >= (distance - eps)):
-                        partner_H_indices = np.argwhere(self.indexlist == i).flatten()
-                        displace_H = H_list[partner_H_indices[0], :]
-
-                        displace_H = get_displaced_H(displace_H, reference_H, reference_O)
-                        H_list[partner_H_indices[0], :] = displace_H
-
-                        H_list[H_list >= 1] -= 1
-                        H_list[H_list < 0] += 1
-
-                        write_lammps_data(water_file, H_list, O_list, self.box_size[snapshot],
-                                          self.n_atoms, overwrite)
-
-                        if self.verbosity == "loud":
-                            print(f"Trajectory {copy} saved to {water_file}")
-
-                        successful_count += 1
-                        partner_found = True
-                        break
-
-                if not partner_found and self.verbosity == "loud":
-                    print(f"WARNING: Trajectory {copy}: No valid partner found at distance {distance}±{eps}")
-
-            print(f"Successfully generated {successful_count}/{num_traj} ion trajectories")
+        # ====================================================================
+        # SINGLE TRAJECTORY MODE
+        # ====================================================================
+        if num_traj is None:
+            water_file = build_file_path(path, file_name)
+            do_displacement(snapshot, id, distance, eps, water_file, overwrite)
             return None
+
+        # ====================================================================
+        # MULTIPLE TRAJECTORY MODE
+        # ====================================================================
+        if not isinstance(num_traj, int):
+            num_traj = int(num_traj)
+            print("WARNING: num_traj converted to integer")
+
+        successful = 0
+        for copy in range(num_traj):
+            water_file = build_file_path(path, file_name, suffix=f"_{copy}")
+
+            if do_displacement(snapshot, id, distance, eps, water_file, overwrite):
+                successful += 1
+
+        print(f"Successfully generated {successful}/{num_traj} ion trajectories")
+        return None
+
 
     def cut_snapshot(self, snapshot: int = 0, path: str = None) -> None:
         '''
