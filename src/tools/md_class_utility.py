@@ -736,6 +736,7 @@ def diffusion_timestep_tracing(trj: Trajectory, h3o_only: bool=True)->([int], [i
 
     return diffusion, jumps, h3o_ids_ts
 
+
 def get_diffusion_distance(diffusion: [int], ion_ids: [int], trj: Trajectory)->[float]:
     '''
     Function to calculate the diffusion contribution towards the MSD by tracing the H3O+ ion thru the entire trajectory
@@ -774,6 +775,7 @@ def get_diffusion_distance(diffusion: [int], ion_ids: [int], trj: Trajectory)->[
         temp = []
     return diffusion_distances
 
+3
 def get_jump_distances(jumps: [int], ion_ids: [int], trj: Trajectory) -> [float]:
     '''
     Function to calculate the proton jumping contribution to the H3O MSD
