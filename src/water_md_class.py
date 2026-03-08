@@ -16,7 +16,8 @@ from src.tools.rdf_calculations import calculate_rdf
 class Trajectory:
     def __init__(self, file: str, save: str=None, format: str = 'lammpstrj', scaled: int = 1,
                  verbosity: str="silent", batch: bool=True, batch_size: int=1000, lazy_load: bool=True,
-                 snapshot_range: [(int, int)]=None, cache_ions: bool=True, debug: bool=False) -> None:
+                 snapshot_range: [(int, int)]=None, cache_ions: bool=True, debug: bool=False,
+                 validate: bool=False) -> None:
         '''
         Class to parse, manipulate and plot the lammps-trajectory objects.
         Initializes with:
@@ -117,6 +118,15 @@ class Trajectory:
         self._ion_indices_cache = None
         self._ion_cache_valid = False
         self.cache_ions = cache_ions
+
+        if validate:
+            report = self.validate_snapshot(snapshot=0, strict=True)
+            if not report['passed']:
+                raise ValueError(
+                    f"Trajectory validation failed on load: "
+                    f"{len(report['errors'])} errors. "
+                    f"Set validate=False to skip."
+                )
 
         # Automatically identify ions on init if cache_ions=True
         if self.cache_ions:
@@ -772,6 +782,431 @@ class Trajectory:
         self._ion_cache_valid = False
         if self.verbosity == "loud":
             print("Ion cache invalidated")
+    def validate_snapshot(self, snapshot: int = 0, strict: bool = True,
+                          bond_range: tuple = (0.85, 1.15),
+                          angle_range: tuple = (90.0, 120.0),
+                          overlap_threshold: float = 0.5,
+                          expected_coordination: int = 2) -> dict:
+        '''
+        Validate a single snapshot of a water trajectory for physical and structural
+        correctness. Intended to be run BEFORE displacement or LAMMPS submission
+        to catch corrupted inputs early.
+
+        Checks performed:
+            1. Stoichiometry:  n_H == 2 * n_O
+            2. Coordinate bounds: all coords in [0, 1) for scaled trajectories
+            3. Molecular integrity: every O has exactly `expected_coordination` H neighbours
+            4. Bond lengths: all O-H bonds within `bond_range` (in Angstroms)
+            5. H-O-H angles: all molecular angles within `angle_range` (in degrees)
+            6. Atom overlaps: no two atoms closer than `overlap_threshold` (in Angstroms)
+            7. Box sanity: box dimensions positive and physically reasonable
+
+        :param snapshot: which timestep to validate
+        :param strict: if True, prints a full diagnostic report to stdout
+        :param bond_range: (min, max) acceptable O-H bond length in Angstroms
+        :param angle_range: (min, max) acceptable H-O-H angle in degrees
+        :param overlap_threshold: minimum allowed distance between any two atoms (Angstroms)
+        :param expected_coordination: expected number of H per O (2 for pure water)
+        :return: dict with validation results and detailed diagnostics
+        '''
+
+        report = {
+            'snapshot': snapshot,
+            'passed': True,
+            'checks': {},
+            'errors': [],
+            'warnings': [],
+        }
+
+        box = np.array(self.box_size[snapshot])
+
+        # ================================================================
+        # Extract data and determine coordinate space
+        # ================================================================
+        O_data = self.s2[snapshot]  # shape (n_O, 5): [id, type, x, y, z]
+        H_data = self.s1[snapshot]  # shape (n_H, 5)
+        n_O = O_data.shape[0]
+        n_H = H_data.shape[0]
+
+        O_coords = O_data[:, 2:]  # shape (n_O, 3)
+        H_coords = H_data[:, 2:]  # shape (n_H, 3)
+
+        is_scaled = bool(self.scaled)  # 1 → True (fractional), 0 → False (Angstrom)
+
+        # Convert to real space (Angstroms) for all geometry checks
+        if is_scaled:
+            O_real = O_coords * box
+            H_real = H_coords * box
+        else:
+            O_real = O_coords
+            H_real = H_coords
+
+        # ================================================================
+        # CHECK 1: Stoichiometry
+        # ================================================================
+        stoich_ok = (n_H == expected_coordination * n_O)
+        report['checks']['stoichiometry'] = {
+            'passed': stoich_ok,
+            'n_hydrogen': n_H,
+            'n_oxygen': n_O,
+            'expected_ratio': expected_coordination,
+            'actual_ratio': n_H / n_O if n_O > 0 else None,
+        }
+        if not stoich_ok:
+            report['passed'] = False
+            report['errors'].append(
+                f"Stoichiometry: expected n_H = {expected_coordination} * n_O = "
+                f"{expected_coordination * n_O}, got n_H = {n_H}"
+            )
+
+        # ================================================================
+        # CHECK 2: Coordinate bounds
+        #   scaled:  [0, 1)
+        #   real:    [0, box_size) per dimension
+        # ================================================================
+        all_coords = np.vstack([O_coords, H_coords])
+
+        out_of_lower = np.any(all_coords < 0.0, axis=1)
+
+        if is_scaled:
+            upper_bound = np.array([1.0, 1.0, 1.0])
+            bound_label = "[0, 1)"
+        else:
+            upper_bound = box
+            bound_label = f"[0, box_size)"
+
+        out_of_upper = np.any(all_coords >= upper_bound, axis=1)
+        n_out_lower = np.sum(out_of_lower)
+        n_out_upper = np.sum(out_of_upper)
+        bounds_ok = (n_out_lower == 0 and n_out_upper == 0)
+
+        report['checks']['coordinate_bounds'] = {
+            'passed': bounds_ok,
+            'is_scaled': is_scaled,
+            'expected_range': bound_label,
+            'n_below_zero': int(n_out_lower),
+            'n_above_upper': int(n_out_upper),
+            'coord_min': float(all_coords.min()),
+            'coord_max': float(all_coords.max()),
+        }
+        if not bounds_ok:
+            report['passed'] = False
+            if n_out_lower > 0:
+                worst_low = all_coords[out_of_lower].min()
+                report['errors'].append(
+                    f"Coordinates: {n_out_lower} atoms below 0 "
+                    f"(worst: {worst_low:.6f})"
+                )
+            if n_out_upper > 0:
+                worst_high = all_coords[out_of_upper].max()
+                upper_str = "1.0" if is_scaled else f"box_size"
+                report['errors'].append(
+                    f"Coordinates: {n_out_upper} atoms >= {upper_str} "
+                    f"(worst: {worst_high:.6f})"
+                )
+
+        # ================================================================
+        # GATE: If coordinates are out of bounds, KDTree will fail.
+        # Skip geometry checks and report what we know.
+        # ================================================================
+        if not bounds_ok:
+            for skip_name in ['coordination', 'bond_lengths', 'hoh_angles',
+                              'overlaps', 'box']:
+                report['checks'][skip_name] = {
+                    'passed': False,
+                    'skipped': True,
+                    'reason': 'coordinates out of bounds — fix bounds first',
+                }
+            report['passed'] = False
+
+            if strict:
+                status = "FAILED ✗"
+                print(f"\n{'='*70}")
+                print(f"TRAJECTORY VALIDATION — Snapshot {snapshot}   [{status}]")
+                print(f"{'='*70}")
+                print(f"  System: {n_O} O + {n_H} H = {n_O + n_H} atoms")
+                print(f"  Box:    {box[0]:.4f} × {box[1]:.4f} × {box[2]:.4f} Å")
+                print()
+                for name, check in report['checks'].items():
+                    if check.get('skipped'):
+                        print(f"  [—] {name}  (skipped: {check['reason']})")
+                    else:
+                        mark = "✓" if check['passed'] else "✗"
+                        print(f"  [{mark}] {name}")
+                if report['errors']:
+                    print(f"\n  ERRORS:")
+                    for e in report['errors']:
+                        print(f"    ✗ {e}")
+                print(f"{'='*70}\n")
+
+            return report
+
+        # ================================================================
+        # CHECK 3: Molecular integrity (coordination numbers)
+        # ================================================================
+        # Build neighbour list: for each H, find its nearest O
+        # O_real and H_real are already in Angstroms (converted above)
+
+        tree_O = cKDTree(O_real, boxsize=box)
+        dists_HO, indices_HO = tree_O.query(H_real, k=1)
+
+        coordination = np.bincount(indices_HO, minlength=n_O)
+        n_correct = np.sum(coordination == expected_coordination)
+        n_under = np.sum(coordination < expected_coordination)
+        n_over = np.sum(coordination > expected_coordination)
+
+        coord_ok = (n_correct == n_O)
+        report['checks']['coordination'] = {
+            'passed': coord_ok,
+            'n_correct': int(n_correct),
+            'n_undercoordinated': int(n_under),
+            'n_overcoordinated': int(n_over),
+            'distribution': {int(k): int(v) for k, v in
+                             zip(*np.unique(coordination, return_counts=True))},
+        }
+        if not coord_ok:
+            report['passed'] = False
+            # List the offending oxygens
+            under_ids = np.where(coordination < expected_coordination)[0]
+            over_ids = np.where(coordination > expected_coordination)[0]
+            if len(under_ids) > 0:
+                report['errors'].append(
+                    f"Coordination: {n_under} O atoms undercoordinated "
+                    f"(indices: {under_ids[:10].tolist()}"
+                    f"{'...' if len(under_ids) > 10 else ''})"
+                )
+            if len(over_ids) > 0:
+                report['errors'].append(
+                    f"Coordination: {n_over} O atoms overcoordinated "
+                    f"(indices: {over_ids[:10].tolist()}"
+                    f"{'...' if len(over_ids) > 10 else ''})"
+                )
+
+        # ================================================================
+        # CHECK 4: Bond lengths
+        # ================================================================
+        # dists_HO from the KDTree query are already in Angstroms
+        bond_min, bond_max = bond_range
+        bonds_too_short = dists_HO < bond_min
+        bonds_too_long = dists_HO > bond_max
+        bonds_ok = not (np.any(bonds_too_short) or np.any(bonds_too_long))
+
+        report['checks']['bond_lengths'] = {
+            'passed': bonds_ok,
+            'range_angstrom': bond_range,
+            'actual_min': float(dists_HO.min()),
+            'actual_max': float(dists_HO.max()),
+            'actual_mean': float(dists_HO.mean()),
+            'actual_std': float(dists_HO.std()),
+            'n_too_short': int(np.sum(bonds_too_short)),
+            'n_too_long': int(np.sum(bonds_too_long)),
+        }
+        if not bonds_ok:
+            report['passed'] = False
+            if np.any(bonds_too_short):
+                worst = dists_HO[bonds_too_short].min()
+                report['errors'].append(
+                    f"Bond lengths: {np.sum(bonds_too_short)} bonds below "
+                    f"{bond_min} Å (shortest: {worst:.4f} Å)"
+                )
+            if np.any(bonds_too_long):
+                worst = dists_HO[bonds_too_long].max()
+                report['errors'].append(
+                    f"Bond lengths: {np.sum(bonds_too_long)} bonds above "
+                    f"{bond_max} Å (longest: {worst:.4f} Å)"
+                )
+
+        # ================================================================
+        # CHECK 5: H-O-H angles
+        # ================================================================
+        angle_min_deg, angle_max_deg = angle_range
+        angles_list = []
+        bad_angle_molecules = []
+
+        # Only check properly coordinated molecules
+        for o_idx in range(n_O):
+            h_indices = np.where(indices_HO == o_idx)[0]
+            if len(h_indices) != expected_coordination:
+                continue  # skip malformed molecules
+
+            # Unwrap H positions relative to O (minimum image)
+            o_pos = O_real[o_idx]
+            h_positions = []
+            for h_idx in h_indices:
+                h_pos = H_real[h_idx]
+                delta = h_pos - o_pos
+                delta -= box * np.round(delta / box)
+                h_positions.append(delta)  # O-H vectors
+
+            # Compute angle between all H-O-H pairs
+            for a in range(len(h_positions)):
+                for b in range(a + 1, len(h_positions)):
+                    v1 = h_positions[a]
+                    v2 = h_positions[b]
+                    cos_angle = np.dot(v1, v2) / (
+                            np.linalg.norm(v1) * np.linalg.norm(v2)
+                    )
+                    angle_deg = np.degrees(np.arccos(np.clip(cos_angle, -1, 1)))
+                    angles_list.append(angle_deg)
+
+                    if angle_deg < angle_min_deg or angle_deg > angle_max_deg:
+                        bad_angle_molecules.append((o_idx, angle_deg))
+
+        angles_arr = np.array(angles_list) if angles_list else np.array([])
+        angles_ok = len(bad_angle_molecules) == 0
+
+        report['checks']['hoh_angles'] = {
+            'passed': angles_ok,
+            'range_degrees': angle_range,
+            'n_checked': len(angles_list),
+            'n_out_of_range': len(bad_angle_molecules),
+        }
+        if len(angles_arr) > 0:
+            report['checks']['hoh_angles']['actual_min'] = float(angles_arr.min())
+            report['checks']['hoh_angles']['actual_max'] = float(angles_arr.max())
+            report['checks']['hoh_angles']['actual_mean'] = float(angles_arr.mean())
+            report['checks']['hoh_angles']['actual_std'] = float(angles_arr.std())
+
+        if not angles_ok:
+            # Angles outside range are a warning (thermal fluctuations can cause this)
+            # rather than a hard error, unless they're extremely bad
+            extreme = [m for m in bad_angle_molecules
+                       if m[1] < angle_min_deg - 20 or m[1] > angle_max_deg + 20]
+            if extreme:
+                report['passed'] = False
+                report['errors'].append(
+                    f"H-O-H angles: {len(extreme)} molecules with extreme angles "
+                    f"(e.g. O[{extreme[0][0]}] = {extreme[0][1]:.1f}°)"
+                )
+            else:
+                report['warnings'].append(
+                    f"H-O-H angles: {len(bad_angle_molecules)} molecules outside "
+                    f"[{angle_min_deg}, {angle_max_deg}]° "
+                    f"(mild — may be thermal fluctuation)"
+                )
+
+        # ================================================================
+        # CHECK 6: Atom overlaps (using O-O distances as proxy)
+        # ================================================================
+        # Check O-O distances — fastest proxy for molecular overlaps
+        tree_OO = cKDTree(O_real, boxsize=box)
+        # Query k=2 because k=1 is self
+        dists_OO, _ = tree_OO.query(O_real, k=2)
+        nn_dists_OO = dists_OO[:, 1]  # nearest non-self neighbor
+
+        n_overlap = np.sum(nn_dists_OO < overlap_threshold)
+        overlap_ok = (n_overlap == 0)
+
+        report['checks']['overlaps'] = {
+            'passed': overlap_ok,
+            'threshold_angstrom': overlap_threshold,
+            'closest_OO_distance': float(nn_dists_OO.min()),
+            'n_overlapping_pairs': int(n_overlap),
+        }
+        if not overlap_ok:
+            report['passed'] = False
+            worst_idx = np.argmin(nn_dists_OO)
+            report['errors'].append(
+                f"Overlaps: {n_overlap} O-O pairs closer than "
+                f"{overlap_threshold} Å (closest: O[{worst_idx}] at "
+                f"{nn_dists_OO.min():.4f} Å)"
+            )
+
+        # Also check H-H overlaps for completeness
+        if n_H > 1:
+            tree_HH = cKDTree(H_real, boxsize=box)
+            dists_HH, _ = tree_HH.query(H_real, k=2)
+            nn_dists_HH = dists_HH[:, 1]
+            n_hh_overlap = np.sum(nn_dists_HH < overlap_threshold)
+            report['checks']['overlaps']['closest_HH_distance'] = float(nn_dists_HH.min())
+            report['checks']['overlaps']['n_HH_overlapping'] = int(n_hh_overlap)
+            if n_hh_overlap > 0:
+                report['passed'] = False
+                report['errors'].append(
+                    f"Overlaps: {n_hh_overlap} H-H pairs closer than "
+                    f"{overlap_threshold} Å"
+                )
+
+        # ================================================================
+        # CHECK 7: Box sanity
+        # ================================================================
+        box_positive = np.all(box > 0)
+        # Typical water boxes: 5-100 Å per side
+        box_reasonable = np.all(box > 1.0) and np.all(box < 500.0)
+
+        report['checks']['box'] = {
+            'passed': box_positive and box_reasonable,
+            'dimensions_angstrom': box.tolist(),
+            'is_positive': bool(box_positive),
+            'is_reasonable': bool(box_reasonable),
+        }
+        if not box_positive:
+            report['passed'] = False
+            report['errors'].append(f"Box: non-positive dimensions {box}")
+        elif not box_reasonable:
+            report['warnings'].append(
+                f"Box: dimensions {box} outside typical range [1, 500] Å"
+            )
+
+        # ================================================================
+        # REPORT OUTPUT
+        # ================================================================
+        if strict:
+            status = "PASSED ✓" if report['passed'] else "FAILED ✗"
+            coord_space = "scaled [0,1)" if is_scaled else "real (Å)"
+            print(f"\n{'='*70}")
+            print(f"TRAJECTORY VALIDATION — Snapshot {snapshot}   [{status}]")
+            print(f"{'='*70}")
+            print(f"  System: {n_O} O + {n_H} H = {n_O + n_H} atoms")
+            print(f"  Box:    {box[0]:.4f} × {box[1]:.4f} × {box[2]:.4f} Å")
+            print(f"  Coords: {coord_space}")
+            print()
+
+            for name, check in report['checks'].items():
+                mark = "✓" if check['passed'] else "✗"
+                print(f"  [{mark}] {name}")
+
+                # Print relevant details depending on check type
+                if name == 'stoichiometry' and not check['passed']:
+                    print(f"      H/O ratio: {check['actual_ratio']:.2f} "
+                          f"(expected {check['expected_ratio']})")
+
+                elif name == 'coordinate_bounds':
+                    print(f"      range: [{check['coord_min']:.6f}, "
+                          f"{check['coord_max']:.6f}]  "
+                          f"(expected {check['expected_range']})")
+
+                elif name == 'coordination':
+                    print(f"      distribution: {check['distribution']}")
+
+                elif name == 'bond_lengths':
+                    print(f"      {check['actual_min']:.4f} – "
+                          f"{check['actual_max']:.4f} Å  "
+                          f"(mean {check['actual_mean']:.4f} ± "
+                          f"{check['actual_std']:.4f})")
+
+                elif name == 'hoh_angles' and check['n_checked'] > 0:
+                    print(f"      {check.get('actual_min', 0):.1f}° – "
+                          f"{check.get('actual_max', 0):.1f}°  "
+                          f"(mean {check.get('actual_mean', 0):.1f}° ± "
+                          f"{check.get('actual_std', 0):.1f}°)")
+
+                elif name == 'overlaps':
+                    print(f"      closest O-O: {check['closest_OO_distance']:.4f} Å")
+
+            if report['warnings']:
+                print(f"\n  WARNINGS:")
+                for w in report['warnings']:
+                    print(f"    ⚠ {w}")
+
+            if report['errors']:
+                print(f"\n  ERRORS:")
+                for e in report['errors']:
+                    print(f"    ✗ {e}")
+
+            print(f"{'='*70}\n")
+
+        return report
 
     def get_neighbour_KDT(self, species_1: np.ndarray = None, species_2: np.ndarray = None,
                           mode: str = 'normal', snapshot: int = 0) -> (np.ndarray, np.ndarray):
@@ -1382,6 +1817,14 @@ class Trajectory:
                 print(f"Searched {len(valid_oxygens)} valid H2O molecules")
 
             return False
+
+        report = self.validate_snapshot(snapshot=snapshot, strict=False)
+        if not report['passed']:
+            error_summary = "; ".join(report['errors'][:3])
+            raise ValueError(
+                f"Input trajectory failed validation at snapshot {snapshot}: "
+                f"{error_summary}. Run validate_snapshot(strict=True) for details."
+            )
 
         # ====================================================================
         # SINGLE TRAJECTORY MODE
