@@ -8,3 +8,11 @@ md_initials*
 tjr
 .ipynb_checkpoints
 .lammpstrj
+/build/
+/docs/
+/source/
+/.claude/
+/venv/
+/make.bat
+/Makefile
+/hist/

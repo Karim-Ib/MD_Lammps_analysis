@@ -26,11 +26,13 @@ A Python analysis framework for molecular dynamics trajectories of liquid water,
     - [Rotational Diffusion](#rotational-diffusion)
     - [Translational Diffusion](#translational-diffusion)
     - [Trajectory Validation](#trajectory-validation)
+    - [Trajectory Manipulation](#trajectory-manipulation)
 7. [Tools Subpackage](#tools-subpackage)
     - [md_class_functions](#md_class_functions)
     - [md_class_utility](#md_class_utility)
     - [md_class_graphs](#md_class_graphs)
     - [rdf_calculations](#rdf_calculations)
+    - [get_water_box](#get_water_box)
 8. [Performance & Memory](#performance--memory)
 9. [Coordinate Conventions](#coordinate-conventions)
 10. [Known Limitations & Caveats](#known-limitations--caveats)
@@ -87,7 +89,8 @@ MD_Lammps_analysis_class/
 │       ├── md_class_functions.py   # Low-level computation (KDTree, distances, H-bond check, streaming parser)
 │       ├── md_class_graphs.py      # Visualization functions
 │       ├── md_class_utility.py     # Higher-level analysis workflows
-│       └── rdf_calculations.py     # Pure-function RDF engine
+│       ├── rdf_calculations.py     # Pure-function RDF engine
+│       └── get_water_box.py        # Generate randomized pure-water LAMMPS data files
 ├── docs/                           # Sphinx-generated HTML documentation
 └── README.md
 ```
@@ -265,6 +268,17 @@ oh_id, h3o_id = trj.get_ion_indices(snapshot=100)        # single frame, -1 if n
 trj.invalidate_ion_cache()
 ```
 
+**KDTree nearest-neighbour assignment** (maps each H atom to its nearest O; used internally but also callable directly):
+
+```python
+# Returns (ind_out, dist_out): nearest O index for each H, at snapshot 0
+ind, dist = trj.get_neighbour_KDT(snapshot=0, mode="pbc")
+
+# With explicit arrays (e.g. for a single HDF5 frame)
+ind, dist = trj.get_neighbour_KDT(species_1=trj.s1[0], species_2=trj.s2[0],
+                                   mode="pbc", snapshot=0)
+```
+
 ### Hydrogen Displacement (Ion Creation)
 
 Creates ionized water configurations from equilibrium trajectories. The algorithm:
@@ -420,6 +434,16 @@ plot_ion_speed(ion_dist)
 
 The array contains zeros after `recombination_time` since ions no longer exist.
 
+**Ion speed** (instantaneous velocity of OH⁻ and H₃O⁺ centre-of-mass between consecutive snapshots):
+
+```python
+speed_oh, speed_h3o = trj.get_ion_speed(dt=0.0005)  # dt in ps
+# speed_oh / speed_h3o: ndarray (recombination_time-1,)
+
+from src.tools.md_class_graphs import plot_ion_speed
+plot_ion_speed(speed_oh, speed_h3o, dt=0.0005)
+```
+
 ### Mean Squared Displacement
 
 Computes the MSD based on centre-of-mass tracking of water molecules:
@@ -491,6 +515,53 @@ if not report['passed']:
 
 Enable at load time with `validate=True` in the constructor — this raises a `ValueError` if validation fails.
 
+### Trajectory Manipulation
+
+Methods for extracting frames, shrinking the system, and writing new LAMMPS input files.
+
+**Extract a single snapshot as a `.data` file:**
+
+```python
+trj.cut_snapshot(snapshot=100, path="frame_100.data")
+```
+
+**Remove N random water molecules and write the reduced system:**
+
+```python
+# format_out: "lammps" (default) or "XDATCAR"
+trj.remove_atoms(N=10, snap=0, path="output/", format_out="lammps")
+```
+
+**Expand the simulation box 2× in each dimension** (creates an 8× replicated system; ions are removed before expansion by default):
+
+```python
+trj.expand_system(timestep=0, remove_ions=True)
+# Result stored in trj.expanded_system (ndarray) and trj.expanded_box
+```
+
+**Remove N molecules from an expanded system and write as a new `.data` file** (from `md_class_utility`):
+
+```python
+from src.tools.md_class_utility import remove_from_expanded_system
+
+remove_from_expanded_system(trj, path_save="smaller_box.data", ts=0, N=50)
+```
+
+**Group atoms into molecules** and write a colour-coded `.lammpstrj` for visualizers like Ovito (atom type encodes coordination: 1=OH⁻, 2=H₂O, 3=H₂O-like, 4=H₃O⁺):
+
+```python
+trj.group_molecules(timestep=5000, path="grouped/")
+```
+
+**Neutralize OH⁻ ions** (add missing H to produce a purely H₃O⁺-only ionized system):
+
+```python
+from src.tools.md_class_utility import fill_OH_ion
+
+fill_OH_ion(folder_input="ion_inputs/", folder_output="h3o_only/",
+            is_scaled=0, HOH_angle=104.5, OH_distance=0.96)
+```
+
 ---
 
 ## Tools Subpackage
@@ -517,6 +588,7 @@ Low-level computational routines, all operating on raw numpy arrays (no `Traject
 | `read_snapshot_batch(...)`            | Read a batch of snapshots for the streaming parser                           |
 | `scale_coordinates_batch(...)`        | Vectorized coordinate scaling for batch processing                           |
 | `get_nearest_neighbors_vectorized(...)` | Vectorized H→O nearest-neighbour assignment                                |
+| `wrap_scaled_coordinates_batch(...)`    | Wrap already-scaled coords into [0,1) via PBC; modifies in-place           |
 | `write_lammpstrj(...)`                | Write trajectory in LAMMPS format                                            |
 
 ### md_class_utility
@@ -525,22 +597,26 @@ Higher-level workflows that operate on `Trajectory` objects:
 
 | Function                            | Purpose                                                                          |
 |-------------------------------------|----------------------------------------------------------------------------------|
-| `generate_md_input(...)`            | Batch-generate ionized trajectories from equilibrium snapshots                   |
-| `get_averaged_rdf(...)`             | Ensemble-average RDFs over multiple trajectory directories                       |
-| `get_HB_timeseries(trj, cutoff)`   | H-bond network size over time for both ions                                      |
-| `get_hb_wire(bonds, oh, h3o)`      | BFS shortest path (H-bond wire) between OH⁻ and H₃O⁺                            |
-| `get_all_wires(trj)`               | H-bond wires at every snapshot up to recombination                               |
-| `get_last_wire(trj)`               | Wire at the snapshot just before recombination                                   |
-| `get_HB_wire_distance(...)`         | Physical distance along a wire                                                   |
-| `get_diffusion_jumps(trj)`         | Decompose H₃O⁺ motion into diffusive and jump timesteps                         |
-| `get_diffusion_distance(...)`       | Cumulative distance from diffusive (vehicular) transport                         |
-| `get_jump_distances(...)`           | Distance covered by each proton jump                                             |
-| `cut_multiple_snaps(trj, ...)`      | Extract multiple frames as separate files                                        |
-| `save_HB_for_ovito(trj, ...)`      | Export H-bonded oxygens to `.lammpstrj` for Ovito                                |
-| `save_HB_Network_ovito(trj, ...)`  | Export full H-bond network to `.lammpstrj` for Ovito                             |
-| `unwrap_pbc(positions, box_dim)`    | Unwrap PBC jumps for continuous trajectories                                     |
-| `remove_mirror_duplicates(pairs)`   | Remove duplicate (A,B)/(B,A) bond pairs                                          |
-| `calculate_hma(data, window)`       | Hull Moving Average for time-series smoothing                                    |
+| `generate_md_input(...)`                    | Batch-generate ionized trajectories from equilibrium snapshots              |
+| `fill_OH_ion(folder_input, ...)`            | Add missing H to OH⁻ ions to neutralize them into H₂O (H₃O⁺-only system)  |
+| `remove_from_expanded_system(trj, ...)`     | Remove N water molecules from an expanded system and write as `.data` file  |
+| `get_averaged_rdf(...)`                     | Ensemble-average RDFs over multiple trajectory directories                  |
+| `get_HB_timeseries(trj, cutoff)`            | H-bond network size over time for both ions                                 |
+| `get_hb_wire(bonds, oh, h3o)`               | BFS shortest path (H-bond wire) between OH⁻ and H₃O⁺                       |
+| `get_all_wires(trj)`                        | H-bond wires at every snapshot up to recombination                          |
+| `get_last_wire(trj)`                        | Wire at the snapshot just before recombination                              |
+| `get_HB_wire_distance(...)`                 | Physical O-O distance along a wire                                          |
+| `get_bond_lifetime(wire_length, range)`     | Average H-bond wire lifetime and per-wire lifetime distribution             |
+| `get_transition_cations(trj, reverse)`      | H-bond structures around H₃O⁺ (or OH⁻) at every snapshot                  |
+| `diffusion_timestep_tracing(trj)`           | Decompose H₃O⁺ motion into vehicular (diffusive) and Grotthuss (jump) steps |
+| `get_diffusion_distance(...)`               | Cumulative distance from diffusive (vehicular) transport                    |
+| `get_jump_distances(...)`                   | Distance covered by each proton jump                                        |
+| `cut_multiple_snaps(trj, ...)`              | Extract multiple frames as separate `.data` files                           |
+| `save_HB_for_ovito(trj, ...)`               | Export H-bonded oxygens to `.lammpstrj` for Ovito                           |
+| `save_HB_Network_ovito(trj, ...)`           | Export full H-bond network to `.lammpstrj` for Ovito                        |
+| `unwrap_pbc(positions, box_dim)`            | Unwrap PBC jumps for continuous trajectories                                |
+| `remove_mirror_duplicates(pairs)`           | Remove duplicate (A,B)/(B,A) bond pairs                                     |
+| `calculate_hma(data, window)`               | Hull Moving Average for time-series smoothing                               |
 
 ### md_class_graphs
 
@@ -548,18 +624,21 @@ Plotting functions (all return `None`, display via `matplotlib`):
 
 | Function                    | Visualizes                                                             |
 |-----------------------------|------------------------------------------------------------------------|
-| `plot_rdf(gr, r, type)`    | Radial distribution function g(r) vs r                                 |
-| `plot_MSD(msd, timestep)`  | Mean squared displacement vs time                                      |
-| `plot_d_rot(rmsd, ts)`     | Rotational MSD / diffusion coefficient                                 |
-| `plot_ion_speed(ion_dist)`  | Ion-ion distance and speed over time                                  |
-| `plot_hbonds_single(...)`   | 3D scatter of H-bond network at a single frame                        |
-| `plot_hbond_network(...)`   | Combined OH⁻ and H₃O⁺ H-bond networks                                |
-| `plot_HB_network(...)`      | Interactive H-bond network with slider for time navigation             |
-| `plot_HB_ratio(...)`        | Ratio of ion H-bond count / total oxygens over time                   |
-| `plot_HB_wire(...)`         | Interactive wire visualization with slider                             |
-| `plot_wire_length(...)`     | Histogram of H-bond wire lengths                                      |
-| `plot_water_hist(...)`      | H-bond coordination histogram (called via `Trajectory.plot_water_hist`) |
-| `plot_rdf_from_file(...)`   | Load and plot RDFs from saved CSV files                                |
+| `plot_rdf(gr, r, type)`              | Radial distribution function g(r) vs r                                        |
+| `plot_MSD(msd, timestep)`            | Mean squared displacement vs time                                              |
+| `plot_d_rot(rmsd, ts)`               | Rotational MSD / diffusion coefficient                                         |
+| `plot_ion_speed(oh, h3o, dt)`        | Instantaneous speed of OH⁻ and H₃O⁺ ions vs time                              |
+| `plot_ion_distance_euc(trj)`         | Euclidean ion-ion distance vs timestep with recombination marker               |
+| `plot_hbonds_single(...)`            | 3D scatter of H-bond network at a single frame                                 |
+| `plot_hbond_network(...)`            | Combined OH⁻ and H₃O⁺ H-bond networks at a single frame                       |
+| `plot_HB_network(...)`               | Interactive H-bond network with slider for time navigation                     |
+| `plot_HB_ratio(...)`                 | Ratio of ion H-bond count / total oxygens over time                            |
+| `plot_HB_wire(...)`                  | Interactive wire visualization with slider                                     |
+| `plot_wire_length(...)`              | Histogram of H-bond wire lengths                                               |
+| `plot_hb_distances(distances)`       | Average O-O distance within H-bond wires over their lifetime                   |
+| `plot_transition_cations(...)`       | Interactive 3D plot of molecular environment around H₃O⁺ (or OH⁻) with slider |
+| `plot_water_hist(...)`               | H-bond coordination histogram (called via `Trajectory.plot_water_hist`)        |
+| `plot_rdf_from_file(...)`            | Load and plot RDFs from saved CSV files                                         |
 
 ### rdf_calculations
 
@@ -572,6 +651,47 @@ Stateless, pure-function RDF engine (no class dependency). Used internally by `T
 | `_calc_rdf_self(...)`   | Self-correlation (OO, HH)                                     |
 | `_calc_rdf_cross(...)`  | Cross-correlation (OH)                                        |
 | `_calc_rdf_ion(...)`    | Ion-centred RDF (OH_ion, H3O_ion)                             |
+
+### get_water_box
+
+Standalone helper to build a randomized pure-water configuration and write it as a LAMMPS `.data` file, suitable as input for `read_data` followed by NVT/NPT equilibration under the HDNN potential.
+
+| Function                          | Purpose                                                             |
+|-----------------------------------|---------------------------------------------------------------------|
+| `generate_water_box(Lx, Ly, Lz, N, output_path, ...)` | Build and write a randomized water box |
+| `estimate_box_size(N, density_gcc)` | Compute cubic box side length for N molecules at a target density |
+
+**Pipeline inside `generate_water_box`:**
+1. Place N oxygen atoms on a perturbed 3D grid.
+2. Resolve O-O overlaps via iterative soft-sphere repulsion.
+3. Assign each molecule a random SO(3) orientation.
+4. Refine orientations for molecules with H-atom clashes.
+5. Validate (stoichiometry, distances, density).
+6. Write the LAMMPS data file (H type 1, O type 2; matches project atom-type convention).
+
+```python
+from src.tools.get_water_box import generate_water_box, estimate_box_size
+
+# Estimate box size for 216 molecules at bulk density
+L = estimate_box_size(216)   # ~18.6 Å
+
+report = generate_water_box(
+    Lx=L, Ly=L, Lz=L,
+    N=216,
+    output_path="water_216.data",
+    seed=42,
+    verbose=True
+)
+# report['passed'] == True if all hard constraints are satisfied
+```
+
+The output is **not** in a low-energy crystalline arrangement by design — molecular orientations are sampled uniformly from SO(3) and grid positions are perturbed with Gaussian noise, ensuring sufficient configurational disorder for the NNP to equilibrate properly. No velocities are written; use `velocity create T seed` in your LAMMPS input script.
+
+Also available as a CLI:
+
+```bash
+python -m src.tools.get_water_box --Lx 18.6 --Ly 18.6 --Lz 18.6 -N 216 -o water_216.data --seed 42
+```
 
 ---
 
