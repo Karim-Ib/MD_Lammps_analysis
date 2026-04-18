@@ -36,7 +36,6 @@ A Python analysis framework for molecular dynamics trajectories of liquid water,
 8. [Performance & Memory](#performance--memory)
 9. [Coordinate Conventions](#coordinate-conventions)
 10. [Known Limitations & Caveats](#known-limitations--caveats)
-11. [Sphinx Documentation](#sphinx-documentation)
 
 ---
 
@@ -91,7 +90,6 @@ MD_Lammps_analysis_class/
 │       ├── md_class_utility.py     # Higher-level analysis workflows
 │       ├── rdf_calculations.py     # Pure-function RDF engine
 │       └── get_water_box.py        # Generate randomized pure-water LAMMPS data files
-├── docs/                           # Sphinx-generated HTML documentation
 └── README.md
 ```
 
@@ -741,15 +739,3 @@ distance = np.linalg.norm(delta)
 - **H-bond wire search** (`get_hb_wire`) uses BFS on the DFS-discovered network. If the H-bond network is disconnected between the two ions at a given snapshot, no wire is returned.
 - **Atom type convention** is hardcoded: type 1 = Hydrogen, type 2 = Oxygen. Trajectories with different type mappings will produce incorrect species splitting.
 
----
-
-## Sphinx Documentation
-
-Full auto-generated API documentation is available in `docs/`. Open `docs/index.html` in a browser, or rebuild with:
-
-```bash
-cd docs/
-make html
-```
-
-The documentation covers all public methods and their parameter signatures.
