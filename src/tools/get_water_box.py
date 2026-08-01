@@ -768,8 +768,9 @@ def generate_water_box(
         Lx: float,
         Ly: float,
         Lz: float,
-        N: int,
         output_path: str,
+        N: Optional[int] = None,
+        number_density: Optional[float] = None,
         oh_bond: float = DEFAULT_OH_BOND,
         hoh_angle: float = DEFAULT_HOH_ANGLE,
         min_OO: float = DEFAULT_MIN_OO,
@@ -802,15 +803,19 @@ def generate_water_box(
     ----------
     Lx, Ly, Lz : float
         Box dimensions in Angstrom. The box spans [0, Lx] x [0, Ly] x [0, Lz].
-    N : int
-        Number of water molecules.
     output_path : str
         File path for the output .data file.
+    N : int, optional
+        Number of water molecules. Exactly one of N or number_density must be given.
+    number_density : float, optional
+        Number density in molecules/Å³. N is derived as round(number_density * Lx*Ly*Lz).
+        Bulk water at 300 K is ~0.0334 molecules/Å³. Exactly one of N or number_density
+        must be given.
     oh_bond : float, default 0.9572
         O-H bond length in Angstrom.
     hoh_angle : float, default 104.52
         H-O-H angle in degrees.
-    min_OO : float, default 2.6
+    min_OO : float, default 2.3
         Minimum allowed O-O distance in Angstrom.
     min_OH_inter : float, default 1.5
         Minimum allowed intermolecular O-H distance in Angstrom
@@ -840,7 +845,8 @@ def generate_water_box(
     Raises
     ------
     ValueError
-        If N < 1 or box dimensions are non-positive.
+        If neither or both of N and number_density are given, if N < 1,
+        or if box dimensions are non-positive.
     FileExistsError
         If output_path exists and overwrite is False.
     RuntimeWarning
@@ -848,13 +854,21 @@ def generate_water_box(
 
     Examples
     --------
+    >>> # Specify molecule count directly
     >>> report = generate_water_box(
     ...     Lx=18.6, Ly=18.6, Lz=18.6,
     ...     N=216,
     ...     output_path='water_216.data',
     ...     seed=42, verbose=True
     ... )
-    >>> # 216 molecules in ~18.6³ Å³ ≈ 0.997 g/cm³  (bulk density)
+
+    >>> # Specify number density instead (bulk water at 300 K)
+    >>> report = generate_water_box(
+    ...     Lx=18.6, Ly=18.6, Lz=18.6,
+    ...     number_density=WATER_NUMBER_DENSITY,
+    ...     output_path='water_bulk.data',
+    ...     seed=42, verbose=True
+    ... )
 
     Notes
     -----
@@ -873,10 +887,23 @@ def generate_water_box(
     # ------------------------------------------------------------------
     # Input validation
     # ------------------------------------------------------------------
-    if N < 1:
-        raise ValueError(f"N must be >= 1, got {N}")
+    if (N is None) == (number_density is None):
+        raise ValueError("Provide exactly one of N (molecule count) or "
+                         "number_density (molecules/Å³), not both or neither.")
+
     if Lx <= 0 or Ly <= 0 or Lz <= 0:
         raise ValueError(f"Box dimensions must be positive, got ({Lx}, {Ly}, {Lz})")
+
+    if number_density is not None:
+        if number_density <= 0:
+            raise ValueError(f"number_density must be positive, got {number_density}")
+        V = Lx * Ly * Lz
+        N = max(1, round(number_density * V))
+        if verbose:
+            print(f"  number_density={number_density:.6f} mol/Å³ → N={N} molecules")
+
+    if N < 1:
+        raise ValueError(f"N must be >= 1, got {N}")
     if min_OO < 2.0 * oh_bond:
         # If min_OO < twice the O-H bond, intramolecular H could overlap
         # with neighboring O. This is almost certainly a user error.
@@ -1049,6 +1076,84 @@ def estimate_box_size(N: int, density_gcc: float = 0.997) -> float:
 
 
 # ==========================================================================
+# Convenience: cubic box from N + number density
+# ==========================================================================
+def generate_cubic_water_box(
+        N: int,
+        number_density: float,
+        output_path: str,
+        oh_bond: float = DEFAULT_OH_BOND,
+        hoh_angle: float = DEFAULT_HOH_ANGLE,
+        min_OO: float = DEFAULT_MIN_OO,
+        min_OH_inter: float = DEFAULT_MIN_OH_INTER,
+        min_HH_inter: float = DEFAULT_MIN_HH_INTER,
+        grid_noise: float = 0.3,
+        max_overlap_iters: int = 1000,
+        seed: Optional[int] = None,
+        overwrite: bool = False,
+        verbose: bool = True
+) -> dict:
+    """
+    Generate a cubic water box given a molecule count and number density.
+
+    Computes the cubic box side length L = (N / number_density)^(1/3) and
+    delegates to generate_water_box with Lx = Ly = Lz = L.
+
+    Parameters
+    ----------
+    N : int
+        Number of water molecules.
+    number_density : float
+        Target number density in molecules/Å³.
+        Bulk water at 300 K is ~0.0334 molecules/Å³ (WATER_NUMBER_DENSITY).
+    output_path : str
+        File path for the output .data file.
+
+    All remaining keyword arguments are forwarded to generate_water_box unchanged.
+
+    Returns
+    -------
+    report : dict
+        Validation report from generate_water_box.
+
+    Examples
+    --------
+    >>> report = generate_cubic_water_box(
+    ...     N=216,
+    ...     number_density=WATER_NUMBER_DENSITY,
+    ...     output_path='water_216_cubic.data',
+    ...     seed=42
+    ... )
+    >>> # box side L = (216 / 0.0334)^(1/3) ≈ 18.6 Å
+    """
+    if N < 1:
+        raise ValueError(f"N must be >= 1, got {N}")
+    if number_density <= 0:
+        raise ValueError(f"number_density must be positive, got {number_density}")
+
+    L = (N / number_density) ** (1.0 / 3.0)
+
+    if verbose:
+        print(f"Cubic box: N={N}, density={number_density:.6f} mol/Å³ → L={L:.4f} Å")
+
+    return generate_water_box(
+        Lx=L, Ly=L, Lz=L,
+        N=N,
+        output_path=output_path,
+        oh_bond=oh_bond,
+        hoh_angle=hoh_angle,
+        min_OO=min_OO,
+        min_OH_inter=min_OH_inter,
+        min_HH_inter=min_HH_inter,
+        grid_noise=grid_noise,
+        max_overlap_iters=max_overlap_iters,
+        seed=seed,
+        overwrite=overwrite,
+        verbose=verbose,
+    )
+
+
+# ==========================================================================
 # CLI interface
 # ==========================================================================
 if __name__ == '__main__':
@@ -1060,8 +1165,14 @@ if __name__ == '__main__':
     parser.add_argument('--Lx', type=float, required=True, help='Box X dimension (Å)')
     parser.add_argument('--Ly', type=float, required=True, help='Box Y dimension (Å)')
     parser.add_argument('--Lz', type=float, required=True, help='Box Z dimension (Å)')
-    parser.add_argument('-N', '--molecules', type=int, required=True,
-                        help='Number of water molecules')
+
+    mol_group = parser.add_mutually_exclusive_group(required=True)
+    mol_group.add_argument('-N', '--molecules', type=int, default=None,
+                           help='Number of water molecules')
+    mol_group.add_argument('--number-density', type=float, default=None,
+                           help=f'Number density in molecules/Å³ '
+                                f'(bulk water ≈ {WATER_NUMBER_DENSITY} mol/Å³)')
+
     parser.add_argument('-o', '--output', type=str, default='water_box.data',
                         help='Output file path (default: water_box.data)')
     parser.add_argument('--seed', type=int, default=None,
@@ -1082,6 +1193,7 @@ if __name__ == '__main__':
     report = generate_water_box(
         Lx=args.Lx, Ly=args.Ly, Lz=args.Lz,
         N=args.molecules,
+        number_density=args.number_density,
         output_path=args.output,
         oh_bond=args.oh_bond,
         hoh_angle=args.hoh_angle,

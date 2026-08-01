@@ -16,3 +16,23 @@ tjr
 /make.bat
 /Makefile
 /hist/
+
+# python build / cache artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.claude/settings.local.json
+
+# raw trajectory / simulation data
+*.lammpstrj
+*.h5
+/trj/
+
+# generated analysis output (regenerate with refactor/results/*.py)
+/refactor/results/outputs/
+/refactor/results/outputs_ensemble/
+/refactor/results/*.log
+/refactor/notebooks/_tutorial_out/
+/test_results/
+*.npz

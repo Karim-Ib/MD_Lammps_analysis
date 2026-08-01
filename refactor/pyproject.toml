@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mdwater"
+version = "0.1.0"
+description = "MD trajectory analysis for water autoionization / ion recombination."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Karim Ibrahim" }]
+keywords = ["molecular-dynamics", "water", "LAMMPS", "hydrogen-bonds", "RDF"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "h5py>=3.8",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.7"]
+test = ["pytest>=7.4", "pytest-cov>=4.1"]
+dev = [
+    "mdwater[test,plot]",
+    "ruff>=0.4",
+    "mypy>=1.7",
+]
+
+[tool.setuptools]
+packages = ["mdwater", "mdwater.io", "mdwater.geometry", "mdwater.ions",
+            "mdwater.observables", "mdwater.water_box"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "NPY"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = false

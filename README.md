@@ -656,8 +656,9 @@ Standalone helper to build a randomized pure-water configuration and write it as
 
 | Function                          | Purpose                                                             |
 |-----------------------------------|---------------------------------------------------------------------|
-| `generate_water_box(Lx, Ly, Lz, N, output_path, ...)` | Build and write a randomized water box |
-| `estimate_box_size(N, density_gcc)` | Compute cubic box side length for N molecules at a target density |
+| `generate_water_box(Lx, Ly, Lz, output_path, ...)` | Build and write a randomized water box; accepts N or number_density |
+| `generate_cubic_water_box(N, number_density, output_path, ...)` | Compute cubic box side L = (N/ρ)^(1/3) and generate the box |
+| `estimate_box_size(N, density_gcc)` | Compute cubic box side length for N molecules at a target mass density |
 
 **Pipeline inside `generate_water_box`:**
 1. Place N oxygen atoms on a perturbed 3D grid.
