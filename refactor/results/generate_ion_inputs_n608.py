@@ -119,6 +119,10 @@ def generate_one(box_seed: np.random.SeedSequence,
         "closest_HH_angstrom": round(hh, 4),
         "closest_HO_angstrom": round(ho, 4),
         "h3o_hoh_angles_deg": [round(a, 2) for a in angles],
+        # O-O pairs the packer could not push apart to MIN_OO. Non-zero means
+        # this configuration ships with close contacts, which is where an NNP
+        # is least reliable -- check it before submitting the run.
+        "n_min_OO_violations": int(wb.n_min_OO_violations),
     }
     return atoms, box, info
 
@@ -176,11 +180,23 @@ def main() -> None:
               f"OH-@{info['donor_o_idx']} H3O+@{info['acceptor_o_idx']}  "
               f"dOO={info['oo_distance']} A  "
               f"HOH={'/'.join(f'{a:.0f}' for a in info['h3o_hoh_angles_deg'])} deg  "
-              f"minHH={info['closest_HH_angstrom']:.2f} A")
+              f"minHH={info['closest_HH_angstrom']:.2f} A"
+              + (f"  !! {info['n_min_OO_violations']} O-O < {MIN_OO} A"
+                 if info["n_min_OO_violations"] else ""))
 
     with (args.out_dir / "manifest.json").open("w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     print(f"\nWrote {args.n_runs} configs + manifest.json to {args.out_dir}")
+
+    bad = [r for r in manifest["runs"] if r["n_min_OO_violations"]]
+    if bad:
+        print(f"\nWARNING: {len(bad)}/{args.n_runs} configs still contain O-O "
+              f"pairs below MIN_OO={MIN_OO} A "
+              f"(indices {[r['index'] for r in bad]}). At n={N_MOLECULES} and "
+              f"ambient density the packer normally converges, so this points "
+              f"at an unlucky seed rather than the packing limit. Close "
+              f"contacts are where the NNP is least trustworthy -- regenerate "
+              f"those indices with a different seed before submitting.")
 
 
 if __name__ == "__main__":

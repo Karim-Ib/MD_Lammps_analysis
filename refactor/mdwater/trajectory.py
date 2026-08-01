@@ -103,15 +103,26 @@ class Trajectory:
         ----------
         path : HDF5 file path.
         mode : "lazy" or "full".
-            - "full" materialises the requested slice into RAM up front.
-            - "lazy" keeps the HDF5 dataset handle; ``self.atoms`` and
-              ``self.box_dim`` still behave like numpy arrays because most
-              observables call ``np.asarray(...)`` on them, but the data is
-              paged in from disk lazily.
+            Both materialise the selected frames into RAM. "lazy" defers the
+            read until this constructor runs (and keeps the backend handle
+            open); "full" has the backend materialise the slice itself.
+
+            .. warning::
+               ``mode="lazy"`` is **not** a way to analyse a trajectory larger
+               than RAM. Without ``snapshot_range`` it reads every frame. The
+               downstream pipeline is array-based -- :func:`mdwater.species.
+               split_species` calls ``np.asarray`` and fancy-indexes the atom
+               axis -- so a deferred handle would be materialised there
+               instead, one step later.
+
+            **Use ``snapshot_range`` to bound memory**; that is the supported
+            route for trajectories that do not fit in RAM, and what
+            ``results/run_full_analysis.py`` does (it walks the file in
+            ``--chunk``-sized windows).
         atom_types : atom-type mapping.
         snapshot_range : (start, stop) inclusive/exclusive frame window.
-            Load only this slice. Essential for interactively working with
-            trajectories that do not fit in RAM.
+            Load only this slice. The memory footprint is set by this window,
+            not by ``mode``.
         """
         backend = load_hdf5_trajectory(path, mode=mode, snapshot_range=snapshot_range)
         if mode == "full":
@@ -119,10 +130,11 @@ class Trajectory:
             atoms = backend.atoms
             box_ds = backend.box
         else:
-            # Lazy: `.atoms` is an h5py Dataset (or `_RangeView`). Materialise
-            # only when the caller reaches for a numpy view. Reading through
-            # `np.asarray(...)` here paginates from HDF5 rather than parsing
-            # 18 MB / 6 GB / ... of ASCII LAMMPS output.
+            # `.atoms` is an h5py Dataset (or `_RangeView`); `[:]` reads the
+            # whole selection into RAM. This is a *read from HDF5* rather than
+            # a reparse of ASCII LAMMPS output, which is the actual win here --
+            # it is not a smaller-than-RAM path. Bound the footprint with
+            # `snapshot_range`; see the class-method docstring.
             atoms = np.asarray(backend.atoms[:])
             box_ds = np.asarray(backend.box[:])
         atoms = np.asarray(atoms, dtype=np.float64)

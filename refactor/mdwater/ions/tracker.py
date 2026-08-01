@@ -22,7 +22,7 @@ from numpy.typing import NDArray
 
 from mdwater.config import RecombinationConfig
 from mdwater.geometry.neighbors import build_kdtree
-from mdwater.pbc import clip_for_ckdtree
+from mdwater.pbc import clip_for_ckdtree, minimum_image
 
 
 @dataclass
@@ -48,13 +48,102 @@ class IonTrajectory:
                          for f in self.per_frame])
 
     def first_oh(self) -> NDArray[np.int64]:
-        """Return the *first* OH- index per frame, or -1 if none."""
+        """Lowest-array-index OH- per frame, or -1 if none. **Diagnostic only.**
+
+        The reduction is by array index, which carries no relation to which ion
+        was tracked in the previous frame. When two ions of the same species
+        coexist -- transient Grotthuss intermediates, or a genuinely multi-ion
+        box -- the returned index can switch between them and the associated
+        position teleports. Use :meth:`track_continuous` for anything that
+        differences positions in time (MSD, hop statistics, displacement).
+        """
         return np.array([f.oh_indices[0] if f.oh_indices.size else -1
                          for f in self.per_frame], dtype=np.int64)
 
     def first_h3o(self) -> NDArray[np.int64]:
+        """Lowest-array-index H3O+ per frame, or -1 if none. **Diagnostic only.**
+
+        See :meth:`first_oh` for why this must not feed a displacement series.
+        """
         return np.array([f.h3o_indices[0] if f.h3o_indices.size else -1
                          for f in self.per_frame], dtype=np.int64)
+
+    def track_continuous(self,
+                         oxygen_positions: NDArray[np.floating],
+                         box: NDArray[np.floating],
+                         max_hop_ang: float = 3.5,
+                         species: str = "h3o",
+                         seed_position: NDArray[np.floating] | None = None
+                         ) -> tuple[NDArray[np.int64], NDArray[np.float64]]:
+        """Follow one ion through time by nearest-to-previous continuity.
+
+        At each frame the tracked ion is the candidate of the requested species
+        minimising the minimum-image distance to the previously tracked
+        position. A candidate further than ``max_hop_ang`` is rejected: no
+        physical Grotthuss step crosses more than one O-O shell in one frame, so
+        a larger jump means the identity was lost, not that the ion moved.
+        Rejected and ion-free frames yield ``-1``, which
+        :func:`~mdwater.observables.ion_msd.ion_msd_decomposition` already
+        treats as a segment break -- a gap is always safer than a teleport.
+
+        Parameters
+        ----------
+        oxygen_positions : (T, nO, 3) unscaled Angstrom.
+        box : (3,) or (T, 3) box lengths (Angstrom).
+        max_hop_ang : rejection threshold in Angstrom (one O-O shell).
+        species : "h3o" or "oh".
+        seed_position : (3,) position the first frame is matched against, for
+            continuing the track across a chunk boundary. Pass the last tracked
+            position of the preceding chunk; ``None`` (default) seeds from
+            scratch. NaN is treated as "no history".
+
+        Returns
+        -------
+        (idx, pos) with ``idx`` of shape (T,) -- the tracked oxygen index or -1 --
+        and ``pos`` of shape (T, 3), NaN where ``idx`` is -1.
+        """
+        if species not in ("h3o", "oh"):
+            raise ValueError("species must be 'h3o' or 'oh'")
+        oxygen_positions = np.asarray(oxygen_positions, dtype=np.float64)
+        box = np.asarray(box, dtype=np.float64)
+        T = len(self.per_frame)
+        if oxygen_positions.shape[0] != T:
+            raise ValueError(
+                f"oxygen_positions has {oxygen_positions.shape[0]} frames, "
+                f"trajectory has {T}")
+
+        idx = np.full(T, -1, dtype=np.int64)
+        pos = np.full((T, 3), np.nan, dtype=np.float64)
+        prev: NDArray[np.float64] | None = None
+        if seed_position is not None:
+            seed = np.asarray(seed_position, dtype=np.float64)
+            if seed.shape != (3,):
+                raise ValueError("seed_position must have shape (3,)")
+            if np.all(np.isfinite(seed)):
+                prev = seed
+
+        for t, frame in enumerate(self.per_frame):
+            cand = frame.h3o_indices if species == "h3o" else frame.oh_indices
+            if cand.size == 0:
+                prev = None                      # lost the ion; reseed later
+                continue
+            L = box if box.ndim == 1 else box[t]
+            here = oxygen_positions[t, cand]      # (n_cand, 3)
+            if prev is None:
+                # No history to match against: seed on the sole candidate, or
+                # on the first if several (ambiguous, but only until the next
+                # frame gives us continuity to work with).
+                pick = 0
+            else:
+                d = np.linalg.norm(minimum_image(here - prev, L), axis=-1)
+                pick = int(np.argmin(d))
+                if d[pick] > max_hop_ang:
+                    prev = None                  # too far to be the same ion
+                    continue
+            idx[t] = int(cand[pick])
+            pos[t] = oxygen_positions[t, cand[pick]]
+            prev = pos[t]
+        return idx, pos
 
 
 def assign_hydrogen_to_oxygen(hydrogen_pos: NDArray[np.floating],

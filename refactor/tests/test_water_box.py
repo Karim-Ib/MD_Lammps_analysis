@@ -75,3 +75,25 @@ def test_intramolecular_geometry_is_exact_after_orientation_search():
     angle = np.degrees(np.arccos(
         np.clip(np.einsum("ij,ij->i", v1, v2) / (d1 * d2), -1.0, 1.0)))
     assert np.allclose(angle, HOH_ANGLE_DEG)
+
+
+def test_generator_reports_remaining_min_OO_violations():
+    """Non-convergence must be visible in the result, not only as a warning.
+
+    A box that ships with sub-cutoff O-O contacts is exactly the input where a
+    neural-network potential is least reliable, so callers need to be able to
+    assert on it. Previously the only signal was a RuntimeWarning that the test
+    suite emitted and ignored.
+    """
+    from mdwater.constants import water_density_to_number_density
+    wb = generate_water_box(WaterBoxSpec(
+        n_molecules=64, number_density=water_density_to_number_density(),
+        min_OO=2.3, seed=7))
+    assert hasattr(wb, "n_min_OO_violations")
+    assert wb.n_min_OO_violations == 0          # 2.3 A converges at bulk density
+
+    # And the reported count is consistent with the geometry itself.
+    L = wb.box
+    O = clip_for_ckdtree(wb.O_positions, L)
+    tree = cKDTree(O, boxsize=L)
+    assert len(tree.query_pairs(r=2.3, output_type="ndarray")) == 0

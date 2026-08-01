@@ -1505,6 +1505,11 @@ Internal (init=False) fields cache derived data:
   - `snapshot_range=(start, end)` half-open frame window. Essential for
     partial loads of large trajectories.
 
+  > **Memory:** `mode` does not bound memory — `snapshot_range` does.
+  > Omitting `snapshot_range` reads every frame under either mode. To
+  > analyse a trajectory larger than RAM, walk it in windows the way
+  > `results/run_full_analysis.py` does with `--chunk`.
+
   **Scale conversion.** The HDF5 file preserves whatever coordinate
   representation the source `.lammpstrj` used (stored on the
   `scaled_in_file` attribute by the streamer). On load, `from_hdf5`

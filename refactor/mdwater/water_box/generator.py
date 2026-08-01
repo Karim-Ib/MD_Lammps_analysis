@@ -64,6 +64,11 @@ class WaterBox:
     H_positions: np.ndarray            # (2N, 3)
     box: np.ndarray                    # (3,) orthogonal edge lengths
     tilts: Optional[np.ndarray] = None  # (3,) [xy, xz, yz] if triclinic
+    # O-O pairs still closer than spec.min_OO after overlap resolution. Non-zero
+    # means the packing did not converge: the box ships with close contacts,
+    # which is exactly where a neural-network potential is least reliable.
+    # Callers feeding an NNP should assert this is 0.
+    n_min_OO_violations: int = 0
 
 
 # =====================================================================
@@ -190,8 +195,13 @@ def _resolve_overlaps(
     max_iters: int,
     rng: np.random.Generator,
     verbose: bool = False,
-) -> np.ndarray:
-    """Iteratively push overlapping O-O pairs apart with a soft repulsion."""
+) -> Tuple[np.ndarray, int]:
+    """Iteratively push overlapping O-O pairs apart with a soft repulsion.
+
+    Returns ``(positions, n_remaining_violations)``; the count is 0 on
+    convergence and is surfaced on :class:`WaterBox` so callers can assert on it
+    rather than having to notice a warning.
+    """
     N = O_positions.shape[0]
     step_scale = 0.3
     prev_n_violations = np.inf
@@ -206,7 +216,7 @@ def _resolve_overlaps(
         if n_violations == 0:
             if verbose:
                 print(f"    Converged after {iteration} iterations.")
-            return O_positions
+            return O_positions, 0
 
         if verbose and iteration % 50 == 0:
             print(f"    Iteration {iteration:4d}: {n_violations} overlapping pairs")
@@ -241,7 +251,7 @@ def _resolve_overlaps(
             f"iterations. {remaining} O-O pairs still below {min_OO}.",
             RuntimeWarning,
         )
-    return O_positions
+    return O_positions, remaining
 
 
 def _pair_repulsion_vectorized(
@@ -483,7 +493,7 @@ def generate_water_box(spec: WaterBoxSpec, verbose: bool = False) -> WaterBox:
     if verbose:
         print(f"  grid spacing = {grid_spacing:.3f}")
 
-    O_positions = _resolve_overlaps(
+    O_positions, n_violations = _resolve_overlaps(
         O_positions, edges, spec.min_OO,
         max_iters=1000, rng=rng, verbose=verbose,
     )
@@ -506,6 +516,7 @@ def generate_water_box(spec: WaterBoxSpec, verbose: bool = False) -> WaterBox:
         H_positions=H_positions,
         box=edges,
         tilts=tilts,
+        n_min_OO_violations=n_violations,
     )
 
 

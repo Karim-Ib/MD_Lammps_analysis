@@ -21,20 +21,35 @@ from numpy.typing import NDArray
 
 from mdwater.errors import ConfigError
 from mdwater.geometry.com import delta_phi
+from mdwater.observables.msd import _msd_sums
 
 
 def rotational_msd(p_series: NDArray[np.floating],
-                   timestep_ps: float) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+                   timestep_ps: float,
+                   multi_origin: bool = True
+                   ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Rotational MSD from a polarization-vector trajectory.
+
+    The cumulative rotation vector ``phi(t)`` is a continuous (unwrapped) 3-vector
+    per molecule, so its MSD is estimated exactly like the translational one --
+    and with ``multi_origin=True`` it uses the same windowed FFT estimator as
+    :func:`~mdwater.observables.msd.compute_msd`. That matters because
+    ``MSDConfig.multi_origin`` defaults to True: with a single origin here, D_r
+    would be a far noisier statistic at long lag than D and the two would not be
+    comparable.
 
     Parameters
     ----------
     p_series : (T, N, 3) unit vectors per molecule per frame.
     timestep_ps : lag between successive frames.
+    multi_origin : average over every time origin (default). Pass False for the
+        legacy single-origin estimator, which differences everything against
+        frame 0.
 
     Returns
     -------
-    t, msd : arrays of shape (T,). Units: (ps, rad^2).
+    t, msd : arrays of shape (T,). Units: (ps, rad^2). With ``multi_origin``,
+    ``t`` is a *lag* time rather than elapsed time from frame 0.
     """
     p_series = np.asarray(p_series, dtype=np.float64)
     if p_series.ndim != 3 or p_series.shape[-1] != 3:
@@ -43,15 +58,16 @@ def rotational_msd(p_series: NDArray[np.floating],
     if T < 2:
         raise ConfigError("need at least two frames")
 
-    # Incremental phi vectors.
-    incr = np.zeros((T - 1, N, 3), dtype=np.float64)
-    for s in range(T - 1):
-        for n in range(N):
-            incr[s, n] = delta_phi(p_series[s, n], p_series[s + 1, n])
+    # Incremental rotation vectors, vectorised over (frame, molecule).
+    incr = delta_phi(p_series[:-1], p_series[1:])          # (T-1, N, 3)
     phi = np.zeros((T, N, 3), dtype=np.float64)
     phi[1:] = np.cumsum(incr, axis=0)
 
-    msd = np.mean(np.sum(phi ** 2, axis=-1), axis=1)
+    if multi_origin:
+        s, counts = _msd_sums(phi)                          # (T, N), (T,)
+        msd = s.sum(axis=1) / (counts * N)
+    else:
+        msd = np.mean(np.sum(phi ** 2, axis=-1), axis=1)
     t = np.arange(T) * timestep_ps
     return t, msd
 

@@ -214,8 +214,23 @@ def _contiguous_runs(mask: NDArray[np.bool_]) -> list[tuple[int, int]]:
 
 def _cumulative_split(committed: NDArray[np.int64],
                       pos: NDArray[np.float64],
-                      box: NDArray[np.float64]) -> tuple[NDArray, NDArray, NDArray, int]:
-    """Cumulative hop/veh/total displacement over one contiguous present segment."""
+                      box: NDArray[np.float64],
+                      raw: NDArray[np.int64] | None = None
+                      ) -> tuple[NDArray, NDArray, NDArray, int]:
+    """Cumulative hop/veh/total displacement over one contiguous present segment.
+
+    ``pos`` is the position of the *raw* pivot oxygen, while the hop/drift split
+    branches on the *de-rattled* ``committed`` identity. During a rattle that
+    ``committed_identity`` filters out, the two disagree: ``committed`` says the
+    ion never left, but ``pos`` has followed the rattle oxygen out and back. The
+    resulting ~2.5 A round trip is not vehicular drift and must not be booked as
+    such. Passing ``raw`` (the un-de-rattled series) lets those steps be
+    identified and skipped, so vehicular displacement only ever accumulates
+    while the trace is genuinely sitting on the committed pivot.
+
+    With ``min_residence <= 1`` nothing is de-rattled, ``raw == committed``, and
+    the behaviour is identical to branching on ``committed`` alone.
+    """
     m = committed.size
     r_hop = np.zeros((m, 3))
     r_veh = np.zeros((m, 3))
@@ -227,8 +242,16 @@ def _cumulative_split(committed: NDArray[np.int64],
             r_hop[i] = r_hop[i - 1] + dr
             r_veh[i] = r_veh[i - 1]
             n_hops += 1
-        else:
+        elif raw is None or (raw[i] == raw[i - 1] == committed[i]):
             r_veh[i] = r_veh[i - 1] + dr
+            r_hop[i] = r_hop[i - 1]
+        else:
+            # Inside a filtered rattle: `pos` is on an oxygen the committed
+            # picture says the ion never occupied. Carry both channels forward
+            # rather than attributing the excursion to drift. (The committed
+            # pivot's own drift over those few frames is ~1e-3 A and is the
+            # error this approximation makes.)
+            r_veh[i] = r_veh[i - 1]
             r_hop[i] = r_hop[i - 1]
     return r_hop + r_veh, r_hop, r_veh, n_hops
 
@@ -267,7 +290,8 @@ def ion_msd_decomposition(ion_o_index_series: NDArray[np.integer],
         if b - a < 2:
             continue
         seg_box = box if box.ndim == 1 else box[a:b]
-        r_tot, r_hop, r_veh, n_hops = _cumulative_split(committed[a:b], pos[a:b], seg_box)
+        r_tot, r_hop, r_veh, n_hops = _cumulative_split(
+            committed[a:b], pos[a:b], seg_box, raw=idx[a:b])
         s_tot, n = msd_sum_fft(r_tot)
         s_hop, _ = msd_sum_fft(r_hop)
         s_veh, _ = msd_sum_fft(r_veh)

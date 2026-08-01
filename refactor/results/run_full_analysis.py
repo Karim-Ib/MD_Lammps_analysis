@@ -42,6 +42,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from mdwater import constants
 from mdwater.config import AtomTypes, HBondConfig, MSDConfig, RDFConfig, RecombinationConfig
 from mdwater.io.hdf5_backend import load_hdf5_trajectory
 from mdwater.io.lammpstrj_stream import stream_lammpstrj_to_hdf5
@@ -103,10 +104,11 @@ def ensure_hdf5(source: Path, hdf5: Path, batch_size: int, overwrite: bool) -> N
 def analyze(hdf5: Path, out: Path, timestep_ps: float, msd_stride: int,
             chunk: int, rdf_max_frames: int, dwell_frames: int,
             max_ion_frames: int, atom_types: AtomTypes,
-            do_hbond_network: bool = True, hbond_cutoff: float = 2.7,
+            do_hbond_network: bool = True,
+            hbond_cutoff: float = constants.HBOND_OO_HOPREADY_ANGSTROM,
             hbond_min_angle: float = 150.0, hbond_stride: int = 5,
             hbond_network_depth: int = 3, hbond_anim_stride: int = 400,
-            jump_min_residence: int = 20) -> dict:
+            jump_min_residence: int = 20, ion_max_hop_ang: float = 3.5) -> dict:
     out.mkdir(parents=True, exist_ok=True)
 
     # Trajectory geometry (open lazily just to read metadata).
@@ -158,6 +160,9 @@ def analyze(hdf5: Path, out: Path, timestep_ps: float, msd_stride: int,
     box_full = np.empty((T, 3), dtype=np.float64)
     # Sampled full snapshots for 3D figures + animations (bounded count).
     anim_frames: list[dict] = []
+    # Carry the tracked ion position across chunk boundaries (see track_continuous).
+    seed_oh: np.ndarray | None = None
+    seed_h3o: np.ndarray | None = None
 
     t0 = time.time()
     for a in range(0, T, chunk):
@@ -172,18 +177,36 @@ def analyze(hdf5: Path, out: Path, timestep_ps: float, msd_stride: int,
             H = trj.hydrogen_positions          # (nb, nH, 3)
             h2o = trj.hydrogen_to_oxygen        # (nb, nH) donor-O per H (cached per chunk)
 
+        # Continuity-preserving identity: match each frame's ion to the nearest
+        # candidate to the previous frame's ion rather than taking the lowest
+        # array index. `seed_*` carries the track across the chunk boundary so
+        # chunking cannot itself break continuity. Frames where no candidate is
+        # within one O-O shell get -1 (a gap), never a jump to a distant ion.
+        oh_idx_c, oh_pos_c = iontraj.track_continuous(
+            O, box, max_hop_ang=ion_max_hop_ang, species="oh",
+            seed_position=seed_oh)
+        h3_idx_c, h3_pos_c = iontraj.track_continuous(
+            O, box, max_hop_ang=ion_max_hop_ang, species="h3o",
+            seed_position=seed_h3o)
+        def _last_tracked(arr: np.ndarray) -> np.ndarray | None:
+            valid = np.where(np.all(np.isfinite(arr), axis=1))[0]
+            return arr[valid[-1]].copy() if valid.size else None
+
+        seed_oh = _last_tracked(oh_pos_c)
+        seed_h3o = _last_tracked(h3_pos_c)
+
         for i, f in enumerate(iontraj.per_frame):
             t = a + i
             n_oh[t] = f.oh_indices.size
             n_h3o[t] = f.h3o_indices.size
-            oh_i = int(f.oh_indices[0]) if f.oh_indices.size else -1
-            h3_i = int(f.h3o_indices[0]) if f.h3o_indices.size else -1
+            oh_i = int(oh_idx_c[i])
+            h3_i = int(h3_idx_c[i])
             first_oh[t] = oh_i
             first_h3o[t] = h3_i
             if oh_i >= 0:
-                oh_ion_pos[t] = O[i, oh_i]
+                oh_ion_pos[t] = oh_pos_c[i]
             if h3_i >= 0:
-                h3o_ion_pos[t] = O[i, h3_i]
+                h3o_ion_pos[t] = h3_pos_c[i]
             bc = np.bincount(np.clip(f.coordination, 0, 7), minlength=8)
             coord_hist += bc[:8]
             if (oh_i >= 0 or h3_i >= 0) and (t % ion_store_stride == 0):
@@ -258,6 +281,9 @@ def analyze(hdf5: Path, out: Path, timestep_ps: float, msd_stride: int,
     log(f"Recombination: recombined={recomb.recombined} frame={recomb.frame} "
         f"dwell_frames={recomb.dwell_frames} (dwell threshold {dwell_frames} frames "
         f"= {dwell_frames*timestep_ps*1000:.0f} fs)")
+    if not recomb.ion_ever_present:
+        log("WARNING: no ion was detected in any frame -- this run never "
+            "ionised, so recombination is undefined (not 'recombined at t=0').")
 
     # Ion count timeseries CSV + plot.
     t_axis = np.arange(T) * timestep_ps
@@ -457,11 +483,16 @@ def analyze(hdf5: Path, out: Path, timestep_ps: float, msd_stride: int,
         # Saved full-resolution over the ion lifetime; the decomposition (with
         # jackknife error bars) is a cheap post-step run separately via
         # results/decompose_ion_msd.py -- no need to re-read the HDF5.
+        # Key names are part of the on-disk contract (decompose_ion_msd.py,
+        # scan_min_residence.py, aggregate_msd_decomposition.py,
+        # proton_position.py all read them) -- `tracking` records how the
+        # identity series was reduced so a trace is self-describing.
         np.savez(out / "ion_trace.npz",
                  first_h3o=first_h3o[:end], first_oh=first_oh[:end],
                  h3o_pos=h3o_ion_pos[:end], oh_pos=oh_ion_pos[:end],
                  box=box_full[:end], timestep_ps=timestep_ps,
-                 min_residence=jump_min_residence)
+                 min_residence=jump_min_residence,
+                 tracking="continuous", max_hop_ang=ion_max_hop_ang)
 
         # 3D static figures + interactive HTML animations (sampled frames).
         rep = None
@@ -564,6 +595,10 @@ def analyze(hdf5: Path, out: Path, timestep_ps: float, msd_stride: int,
             "time_ps": float(recomb.frame * timestep_ps),
             "dwell_frames": int(recomb.dwell_frames),
             "dwell_threshold_frames": int(dwell_frames),
+            # False means the run never ionised at all -- physically different
+            # from an ion pair that survived to the end, which also reports
+            # recombined=False.
+            "ion_ever_present": bool(recomb.ion_ever_present),
         },
         "ions": {
             "frames_with_any_ion": int(has_ion.sum()),
@@ -677,8 +712,12 @@ def main() -> None:
     p.add_argument("--oxygen-type", type=int, default=2)
     p.add_argument("--no-hbond-network", action="store_true",
                    help="skip the ion H-bond network / wire / proton-jump analysis")
-    p.add_argument("--hbond-cutoff", type=float, default=2.7,
-                   help="O-O H-bond cutoff (A) for the ion network/wire (default 2.7)")
+    p.add_argument("--hbond-cutoff", type=float,
+                   default=constants.HBOND_OO_HOPREADY_ANGSTROM,
+                   help="O-O cutoff (A) for the ion network/wire. Defaults to the "
+                        "hop-ready criterion (2.85 A), matching run_ensemble.py and "
+                        "the other drivers; pass 3.5 for the Luzar-Chandler "
+                        "structural criterion")
     p.add_argument("--hbond-min-angle", type=float, default=150.0,
                    help="D-H..A minimum angle (deg) for H-bonds (default 150)")
     p.add_argument("--hbond-stride", type=int, default=5,
@@ -691,6 +730,10 @@ def main() -> None:
     p.add_argument("--jump-min-residence", type=int, default=20,
                    help="frames a new ion identity must persist to count as a committed "
                         "proton hop (de-rattle threshold; default 20 = 10 fs)")
+    p.add_argument("--ion-max-hop-ang", type=float, default=3.5,
+                   help="max per-frame ion displacement (A) accepted as the same ion; "
+                        "beyond this the track is broken rather than teleported "
+                        "(default 3.5 = one O-O shell)")
     args = p.parse_args()
 
     atom_types = AtomTypes(hydrogen=args.hydrogen_type, oxygen=args.oxygen_type)
@@ -709,7 +752,8 @@ def main() -> None:
             hbond_stride=args.hbond_stride,
             hbond_network_depth=args.hbond_network_depth,
             hbond_anim_stride=args.hbond_anim_stride,
-            jump_min_residence=args.jump_min_residence)
+            jump_min_residence=args.jump_min_residence,
+            ion_max_hop_ang=args.ion_max_hop_ang)
 
 
 if __name__ == "__main__":

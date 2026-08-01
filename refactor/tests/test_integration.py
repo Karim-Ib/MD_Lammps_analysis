@@ -62,11 +62,18 @@ def test_end_to_end_lammps_data_no_hardcoded_natoms(tmp_path):
     assert trj.n_atoms == 48 * 3   # not 1824!
 
 
-def test_recombination_never_ionized_says_recombined(tmp_path):
-    """Pure water throughout -> recombination detector accepts immediately."""
+def test_recombination_on_never_ionized_water(tmp_path):
+    """Pure water throughout -> nothing ionised, so nothing recombined.
+
+    Recombination is a transition and needs a prior ion to transition from.
+    This previously asserted ``recombined is True`` on a box that never
+    contained an ion, because every frame being ion-free trivially satisfied
+    the dwell window from frame 0.
+    """
     spec = WaterBoxSpec(n_molecules=32, number_density=0.028, min_OO=2.4, seed=5)
     box = generate_water_box(spec)
     traj_path = _write_trajectory_from_box(box, tmp_path, n_frames=10)
     trj = Trajectory.from_lammpstrj(traj_path)
     result = trj.recombination()
-    assert result.recombined is True
+    assert result.recombined is False
+    assert result.ion_ever_present is False

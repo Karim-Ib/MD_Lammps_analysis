@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from mdwater.stats import block_average, jackknife
+from mdwater.stats import block_average, blocking_curve, jackknife
 from mdwater.observables.ion_msd import (
     block_decomposition,
     jackknife_diffusion,
@@ -86,3 +86,51 @@ def test_save_load_decomposition_roundtrip(tmp_path):
     assert np.allclose(full2.s_tot, full.s_tot)
     assert len(blocks2) == len(blocks)
     assert np.allclose(blocks2[0].s_hop, blocks[0].s_hop)
+
+
+# --- blocking curve --------------------------------------------------------
+def test_blocking_curve_flat_for_uncorrelated_data():
+    """White noise has no correlation time -> SEM is flat in block length."""
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal(4096)
+    lengths, counts, sem = blocking_curve(x, max_blocks=32)
+    assert lengths[0] < lengths[-1]                 # sorted by block length
+    assert np.all(counts >= 2)
+    # Flat to within sampling scatter: no systematic rise.
+    assert sem.max() / sem.min() < 2.5
+
+
+def test_blocking_curve_rises_then_plateaus_for_correlated_data():
+    """Strongly correlated series: short blocks underestimate the true SEM."""
+    rng = np.random.default_rng(1)
+    n, phi = 8192, 0.97                     # AR(1), correlation time ~1/(1-phi)
+    x = np.empty(n)
+    x[0] = rng.standard_normal()
+    for i in range(1, n):
+        x[i] = phi * x[i - 1] + rng.standard_normal()
+    # max_blocks caps the block *count*, so it sets the shortest block length
+    # reached (n // max_blocks). Go high enough to sample below the ~33-frame
+    # correlation time of this AR(1).
+    lengths, _, sem = blocking_curve(x, max_blocks=2048)
+
+    short = sem[lengths <= 8].mean()
+    long = sem[lengths >= 256].mean()
+    # The naive short-block error is badly optimistic ...
+    assert long > 2.0 * short
+    # ... and this is exactly what block_average(n_blocks=8) alone cannot tell
+    # you, which is why the curve exists.
+    _, sem8 = block_average(x, n_blocks=8)
+    assert np.isfinite(sem8)
+
+
+def test_blocking_curve_supports_per_bin_series():
+    """(N, K) input -> a SEM curve per bin, e.g. for a g(r)."""
+    rng = np.random.default_rng(2)
+    x = rng.standard_normal((1024, 5))
+    lengths, _, sem = blocking_curve(x, max_blocks=16)
+    assert sem.shape == (lengths.size, 5)
+
+
+def test_blocking_curve_needs_enough_samples():
+    with pytest.raises(ValueError):
+        blocking_curve(np.zeros(3), max_blocks=8)

@@ -37,8 +37,20 @@ WATER_DENSITY_G_PER_CM3: float = 0.9970
 MAX_PACKING_FRACTION: float = 0.7405
 
 # --- Default hydrogen-bond criteria (Luzar-Chandler 1996) -------------------
+# Structural criterion: the first minimum of g_OO. Use this to ask "are these
+# two molecules hydrogen bonded?".
 HBOND_OO_CUTOFF_ANGSTROM: float = 3.5
 HBOND_MIN_ANGLE_DEG: float = 150.0
+
+# Hop-ready ("compressed") criterion. Proton transfer proceeds through a
+# contracted O-O contact well inside the first g_OO peak, so a Grotthuss wire
+# -- a connected path of bonds a proton could actually traverse -- is a much
+# more restrictive object than a path of structural H-bonds. This is a
+# *different question* from HBOND_OO_CUTOFF_ANGSTROM, not a re-tuning of it,
+# and is kept separate so the two cannot be confused. Wire statistics are
+# steeply cutoff-dependent: report them with a sweep (see
+# results/scan_hbond_cutoff.py) rather than a single value.
+HBOND_OO_HOPREADY_ANGSTROM: float = 2.85
 
 # --- Default RDF parameters -------------------------------------------------
 RDF_DEFAULT_NBINS: int = 200

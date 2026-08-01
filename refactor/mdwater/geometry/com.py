@@ -161,12 +161,18 @@ def delta_phi(p_t: NDArray[np.floating],
       produced 0/0 -> NaN each frame.
 
     Returns a zero vector for undefined / zero-rotation increments.
+
+    Accepts any broadcastable shape ``(..., 3)`` and returns the same shape,
+    so a whole trajectory of molecules can be converted in one call instead of
+    a Python loop over (frame, molecule).
     """
     p = np.asarray(p_t, dtype=np.float64)
     q = np.asarray(p_t_plus, dtype=np.float64)
-    cos = float(np.clip(np.dot(p, q), -1.0, 1.0))
+    cos = np.clip(np.sum(p * q, axis=-1), -1.0, 1.0)
     cross = np.cross(p, q)
-    norm = np.linalg.norm(cross)
-    if norm < 1e-12:
-        return np.zeros(3, dtype=np.float64)
-    return np.arccos(cos) * (cross / norm)
+    norm = np.linalg.norm(cross, axis=-1)
+    good = norm > 1e-12
+    # Divide only where the axis is defined; leave the rest at zero.
+    safe = np.where(good[..., None], norm[..., None], 1.0)
+    out = np.arccos(cos)[..., None] * (cross / safe)
+    return np.where(good[..., None], out, 0.0)

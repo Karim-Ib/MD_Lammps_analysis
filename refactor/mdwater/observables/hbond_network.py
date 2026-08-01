@@ -340,12 +340,42 @@ def committed_identity(ion_o_index_series: NDArray[np.integer],
     for ``min_residence`` consecutive frames; shorter excursions (proton
     rattling) are treated as the previously committed identity. ``-1`` (ion
     absent) frames are passed through unchanged and reset the committed state.
+
+    In the final ``min_residence - 1`` frames a full residence window does not
+    fit. Requiring one there would make a hop in the tail impossible to commit,
+    which matters because the ion series is normally truncated at recombination
+    -- so the un-committable window sits exactly on the event of interest. A
+    tail hop is therefore committed when every *remaining* frame agrees; these
+    are flagged in the companion mask from :func:`committed_identity_flags`
+    because they rest on fewer frames of evidence than a full window.
+
+    Known limitation: a multi-step hop through a short-lived intermediate
+    (0 -> 1 for a few frames -> 2, with the stay on 1 below ``min_residence``)
+    commits as a single 0 -> 2 transition, so the recorded hop displacement is
+    one frame of pivot motion rather than the full two-shell relocation.
+    Committing to each intermediate under a reduced threshold is a design
+    decision, not a bug fix, and is deliberately left open.
+    """
+    out, _ = committed_identity_flags(ion_o_index_series, min_residence)
+    return out
+
+
+def committed_identity_flags(ion_o_index_series: NDArray[np.integer],
+                             min_residence: int = 1
+                             ) -> tuple[NDArray[np.int64], NDArray[np.bool_]]:
+    """:func:`committed_identity` plus a per-frame "tail-truncated" mask.
+
+    The mask is True at frames whose commit was accepted on a shorter-than-
+    ``min_residence`` window because the series ended (see that function's
+    docstring). Callers that care about confidence near the end of a truncated
+    trajectory can mask or down-weight those frames.
     """
     idx = np.asarray(ion_o_index_series, dtype=np.int64)
     n = idx.size
     out = idx.copy()
+    truncated = np.zeros(n, dtype=bool)
     if min_residence <= 1 or n == 0:
-        return out
+        return out, truncated
     cur = idx[0]
     for t in range(1, n):
         if idx[t] < 0:
@@ -358,10 +388,12 @@ def committed_identity(ion_o_index_series: NDArray[np.integer],
             out[t] = cur
             continue
         end = min(n, t + min_residence)
-        if end - t >= min_residence and np.all(idx[t:end] == idx[t]):
+        if np.all(idx[t:end] == idx[t]):
             cur = int(idx[t])          # commit the new identity
+            # Accepted on a short window because the series ran out.
+            truncated[t] = (end - t) < min_residence
         out[t] = cur
-    return out
+    return out, truncated
 
 
 def proton_jump_analysis(ion_o_index_series: NDArray[np.integer],

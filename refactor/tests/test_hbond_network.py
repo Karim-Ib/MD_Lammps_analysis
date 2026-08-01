@@ -5,6 +5,7 @@ import pytest
 from mdwater.observables.hbond import HBond
 from mdwater.observables.hbond_network import (
     committed_identity,
+    committed_identity_flags,
     connecting_wire,
     ion_hbond_network,
     proton_jump_analysis,
@@ -202,3 +203,34 @@ def test_wire_oo_distance_is_the_mean_of_the_links():
     assert wire_oo_distance(wire, pos, box) == pytest.approx(
         wire_bond_distances(wire, pos, box).mean())
     assert np.isnan(wire_oo_distance([2], pos, box))
+
+
+def test_committed_identity_commits_a_hop_in_the_tail():
+    """A hop in the last `min_residence-1` frames must still commit.
+
+    The residence window cannot fit at the end of the series, so requiring a
+    full one made a tail hop permanently uncommittable. The ion trace is
+    normally truncated at recombination, which puts that dead window exactly on
+    the event of interest.
+    """
+    # Hops to identity 1 with only 3 frames left; min_residence is 5.
+    idx = np.array([0, 0, 0, 0, 0, 0, 0, 1, 1, 1])
+    out, truncated = committed_identity_flags(idx, min_residence=5)
+    assert out.tolist() == [0, 0, 0, 0, 0, 0, 0, 1, 1, 1]
+    assert truncated[7]                      # flagged as short-window evidence
+    assert not truncated[:7].any()
+
+
+def test_committed_identity_still_filters_rattles():
+    """The tail rule must not weaken de-rattling inside the series."""
+    idx = np.array([0, 0, 1, 1, 0, 0, 0, 0, 0, 0])   # 2-frame rattle to 1
+    out = committed_identity(idx, min_residence=5)
+    assert out.tolist() == [0] * 10
+
+
+def test_committed_identity_tail_rattle_is_not_committed():
+    """A tail excursion that does not run to the end is still a rattle."""
+    idx = np.array([0, 0, 0, 0, 0, 0, 1, 1, 0, 0])
+    out, truncated = committed_identity_flags(idx, min_residence=5)
+    assert out.tolist() == [0] * 10
+    assert not truncated.any()

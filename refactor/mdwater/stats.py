@@ -33,6 +33,10 @@ def block_average(values: NDArray[np.floating],
     length-``K`` arrays, e.g. a g(r) averaged over frames).
 
     ``sem`` is ``nan`` when there are fewer than two usable blocks.
+
+    ``n_blocks=8`` is a convention, not a converged choice: it is only valid if
+    the blocks are longer than the correlation time of ``values``. Use
+    :func:`blocking_curve` to check, and report the block length you chose.
     """
     values = np.asarray(values, dtype=np.float64)
     n = values.shape[axis]
@@ -44,6 +48,57 @@ def block_average(values: NDArray[np.floating],
     block_means = np.stack([values.take(ix, axis=axis).mean(axis=axis) for ix in parts])
     sem = block_means.std(axis=0, ddof=1) / np.sqrt(nb)
     return mean, sem
+
+
+def blocking_curve(values: NDArray[np.floating],
+                   max_blocks: int = 64,
+                   axis: int = 0) -> tuple[NDArray[np.int64], NDArray[np.float64],
+                                           NDArray[np.float64]]:
+    """SEM as a function of block size -- the check :func:`block_average` lacks.
+
+    ``block_average(n_blocks=8)`` is only trustworthy if 8 blocks are actually
+    long enough to be decorrelated, and nothing verifies that. The standard
+    diagnostic (Flyvbjerg-Petersen) is to scan the block length: for a
+    correlated series the estimated SEM *rises* with block length and then
+    plateaus once blocks exceed the correlation time. The plateau value is the
+    honest error; a curve that never flattens means the series is too short to
+    estimate one at all.
+
+    Parameters
+    ----------
+    values : (N,) or (N, K) series, blocked along ``axis``.
+    max_blocks : largest block count to try (the shortest blocks).
+    axis : axis to block along.
+
+    Returns
+    -------
+    ``(block_lengths, n_blocks, sem)`` sorted by increasing block length.
+    ``sem`` has a leading axis matching ``block_lengths`` and trailing shape
+    equal to the per-element shape of the mean. Report the chosen block length
+    alongside the error, and prefer a value on the plateau.
+    """
+    values = np.asarray(values, dtype=np.float64)
+    n = values.shape[axis]
+    lengths: list[int] = []
+    counts: list[int] = []
+    sems: list[NDArray[np.float64]] = []
+    seen: set[int] = set()
+    # At least 2 blocks to have any scatter; at least 2 samples per block.
+    for nb in range(2, int(min(max_blocks, n // 2)) + 1):
+        blk = n // nb
+        if blk < 2 or blk in seen:
+            continue
+        seen.add(blk)
+        _, sem = block_average(values, n_blocks=nb, axis=axis)
+        lengths.append(blk)
+        counts.append(nb)
+        sems.append(np.asarray(sem, dtype=np.float64))
+    if not lengths:
+        raise ValueError("series too short for a blocking curve")
+    order = np.argsort(lengths)
+    return (np.array(lengths, dtype=np.int64)[order],
+            np.array(counts, dtype=np.int64)[order],
+            np.stack(sems)[order])
 
 
 def jackknife(samples: Sequence,
